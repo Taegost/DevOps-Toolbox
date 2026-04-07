@@ -1,0 +1,75 @@
+{
+  // ============================================================================
+  // DevOps Toolbox — Dev Container Configuration
+  // ============================================================================
+  // This configuration is used when opening THIS repository (the image build
+  // repo) in VS Code. It pulls the published image from Docker Hub so you are
+  // working inside the same environment the image provides.
+  //
+  // Update the image tag here when you want to develop against a specific
+  // published version rather than latest.
+  //
+  // FOR CONSUMING PROJECTS: Do not copy this file into other projects. Use the
+  // template in README.md instead, which is the minimal config needed to pull
+  // and use the toolbox image in any project repo.
+  // ============================================================================
+
+  "name": "DevOps Toolbox",
+
+  // Pull the published image from Docker Hub.
+  // Pin to a specific semver tag (e.g. "yourusername/devops-toolbox:1.0.0")
+  // when you need a stable reference. Use "latest" for day-to-day work on
+  // the image repo itself.
+  "image": "taegost/devops-toolbox:latest",
+
+  // Mount the workspace into /workspace inside the container.
+  // This is where VS Code will open the terminal and where your files live.
+  "workspaceFolder": "/workspace",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
+
+  // Mount credentials read-only so tooling inside the container can use them.
+  // These are never copied into the image — they exist only in the live session.
+  "mounts": [
+    // kubectl access to your cluster
+    "source=${localEnv:HOME}/.kube,target=/home/vscode/.kube,type=bind,readonly",
+    // SSH keys for Ansible and Git operations
+    "source=${localEnv:HOME}/.ssh,target=/home/vscode/.ssh,type=bind,readonly"
+  ],
+
+  // Run as the non-root 'vscode' user created by the base image.
+  "remoteUser": "vscode",
+
+  // VS Code extensions to install when connecting to this container.
+  // These are scoped to working on the image repo itself — Dockerfile
+  // editing, YAML, Terraform, and the pipeline definition.
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        // Docker — Dockerfile syntax, linting, and image management
+        "ms-azuretools.vscode-docker",
+        // HashiCorp Terraform — HCL syntax and validation
+        "hashicorp.terraform",
+        // Ansible — playbook and role authoring
+        "redhat.ansible",
+        // Kubernetes — manifest authoring and cluster interaction
+        "ms-kubernetes-tools.vscode-kubernetes-tools",
+        // YAML — schema validation and formatting
+        "redhat.vscode-yaml",
+        // GitHub Actions — workflow file syntax and validation
+        "github.vscode-github-actions",
+        // Python — for editing dependency files and dev tooling
+        "ms-python.python",
+        // .NET — for editing and validating .NET-related configs
+        "ms-dotnettools.csharp"
+      ],
+      "settings": {
+        // Use the system bash provided by the container
+        "terminal.integrated.defaultProfile.linux": "bash",
+        // Point the Ansible extension at the pipx-installed binary
+        "ansible.ansible.path": "/usr/local/bin/ansible",
+        // Point the Python extension at the pinned Python version
+        "python.defaultInterpreterPath": "/usr/bin/python3"
+      }
+    }
+  }
+}

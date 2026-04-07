@@ -1,0 +1,42 @@
+# =============================================================================
+# DevOps Toolbox — Python Toolbox-Level Dependencies
+# =============================================================================
+# These packages are injected into Ansible's pipx virtualenv via:
+#   pipx inject ansible --requirement dependencies/python-ansible-requirements.txt
+#
+# This makes them importable by Ansible modules and plugins at runtime.
+#
+# SCOPE: This file is for packages that support the TOOLBOX itself — things
+# Ansible modules, inventory plugins, or connection plugins depend on
+# universally. It is NOT for project-specific Python dependencies.
+#
+# Project-specific packages belong in a project's own requirements.txt,
+# installed via postCreateCommand into a project-level virtual environment:
+#   python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+#
+# VERSIONING: Packages are pinned to a minimum compatible version (~=) rather
+# than an exact version. This allows patch-level updates within a compatible
+# release while preventing unexpected major/minor version jumps.
+# Tighten a pin to == only if a specific version is known to be required.
+# =============================================================================
+
+# --- AWS / Route53 integration -----------------------------------------------
+# Required by Ansible's AWS modules (ec2, s3, route53, etc.) and the AWS
+# dynamic inventory plugin.
+boto3~=1.42.84
+
+# --- Kubernetes integration ---------------------------------------------------
+# Required by the kubernetes.core collection for interacting with the k8s API
+# (k8s, helm, k8s_info modules, etc.).
+kubernetes~=35.0.0
+
+# --- Network address manipulation ---------------------------------------------
+# Required by Ansible's network-related filters and modules (e.g. ipaddr
+# filter, network calculations in playbooks).
+netaddr~=1.3.0
+
+# --- Password hashing ---------------------------------------------------------
+# Required by Ansible's 'user' module when creating users with hashed
+# passwords (password_hash filter). Without this, password hashing tasks
+# will fail with a missing dependency error.
+passlib~=1.7.4

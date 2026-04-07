@@ -1,0 +1,43 @@
+# =============================================================================
+# DevOps Toolbox — Python Development Tooling
+# =============================================================================
+# These packages are installed into individual pipx-managed virtualenvs at
+# build time via:
+#
+#   grep -v '^\s*#' python-dev-requirements.txt \
+#     | grep -v '^\s*$' \
+#     | xargs -I {} pipx install {}
+#
+# Each package gets its own isolated virtualenv. Binaries are linked into
+# /usr/local/bin and are available system-wide to all users.
+#
+# SCOPE: Universal Python development tools only. Project-specific libraries
+# (requests, flask, pandas, etc.) are NOT included here — those belong in a
+# project's own requirements.txt, installed directly via:
+#   pip install -r requirements.txt
+#
+# WHY NOT A VENV: The container itself provides the isolation that venvs
+# exist to solve. A venv is only necessary when working on multiple Python
+# projects with conflicting dependencies in the same container session.
+#
+# VERSIONING: Pinned to exact versions (==) for build reproducibility.
+# Update versions here when you want to bring in newer releases, then
+# rebuild and publish a new image tag.
+# =============================================================================
+
+# --- Interactive shell -------------------------------------------------------
+# A significantly friendlier REPL than the default python3 interpreter.
+# Provides tab completion, syntax highlighting, and better error formatting.
+# Run 'ipython' instead of 'python3' for interactive experimentation.
+ipython==9.12.0
+
+# --- Testing -----------------------------------------------------------------
+# The standard Python test runner. Writing tests alongside code is a habit
+# better built early than retrofitted later.
+pytest==9.0.2
+
+# --- Formatting --------------------------------------------------------------
+# An opinionated, zero-configuration code formatter. Run 'black .' in your
+# project directory to automatically format all Python files to a consistent
+# style.
+black==26.3.1

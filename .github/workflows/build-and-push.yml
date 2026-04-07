@@ -1,0 +1,170 @@
+# =============================================================================
+# DevOps Toolbox — Build and Publish Pipeline
+# =============================================================================
+# Builds the DevOps Toolbox image and pushes it to Docker Hub.
+#
+# TRIGGERS:
+#   - Push to main         → builds and pushes with 'latest' tag
+#   - Version tag (v*.*.*)  → builds and pushes with full semver tags
+#   - Pull request to main  → builds only (no push) to validate Dockerfile
+#   - Weekly schedule       → rebuilds to pick up base image security patches
+#   - Manual dispatch       → allows on-demand builds from the Actions tab
+#
+# REQUIRED SECRETS (Settings → Secrets and variables → Actions):
+#   DOCKERHUB_USERNAME   — your Docker Hub username (org-level secret)
+#   DOCKERHUB_TOKEN      — Docker Hub access token, NOT your password (org-level secret)
+#                          Generate at: hub.docker.com → Account Settings → Security
+#   DOCKERHUB_IMAGENAME  — full image path, e.g. yourusername/devops-toolbox (repo-level secret)
+#
+# TAGGING STRATEGY:
+#   Push to main:    latest, sha-<short-commit>
+#   Tag v1.2.3:      1.2.3, 1.2, 1, latest, sha-<short-commit>
+#   Pull request:    no push, build validation only
+#   Scheduled:       latest, sha-<short-commit>
+# =============================================================================
+
+name: Build and Publish
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*.*.*'
+  pull_request:
+    branches:
+      - main
+  schedule:
+    # Weekly rebuild every Monday at 04:00 UTC
+    # Ensures base image security patches are picked up automatically
+    - cron: '0 4 * * 1'
+  workflow_dispatch:
+
+env:
+  REGISTRY: docker.io
+  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_IMAGENAME }}
+
+jobs:
+  build:
+    name: Build and Push
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+      # Required for Cosign OIDC-based signing against Sigstore/Fulcio
+      id-token: write
+
+    steps:
+      # -----------------------------------------------------------------------
+      # Checkout
+      # fetch-depth: 0 is required for the metadata action to correctly resolve
+      # semver tags from the full Git history.
+      # -----------------------------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      # -----------------------------------------------------------------------
+      # Cosign — image signing via Sigstore/Fulcio
+      # Skipped on PRs since there is nothing to sign (no push occurs).
+      # -----------------------------------------------------------------------
+      - name: Install Cosign
+        if: github.event_name != 'pull_request'
+        uses: sigstore/cosign-installer@d7d6bc7722e3daa8c8d11648fca1eb9c9b17c01c # v3.8.1
+
+      # -----------------------------------------------------------------------
+      # Multi-arch setup
+      # QEMU provides CPU emulation so amd64 runners can build arm64 images.
+      # Buildx is the extended Docker build client that enables multi-platform
+      # builds, layer caching, and other BuildKit features.
+      # -----------------------------------------------------------------------
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff9f9dc88ce15f3647e # v3.6.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@b5730b1f96ad7bba1ae6eb9f0e2c7acb3a3b8b4f # v3.10.0
+
+      # -----------------------------------------------------------------------
+      # Docker Hub login
+      # Skipped on PRs — credentials are not needed for a build-only run, and
+      # PRs from forks do not have access to secrets anyway.
+      # Uses DOCKERHUB_TOKEN (access token), NOT DOCKERHUB_PASSWORD.
+      # -----------------------------------------------------------------------
+      - name: Log in to Docker Hub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # -----------------------------------------------------------------------
+      # Image metadata and tags
+      # Derives tags and labels from the Git context automatically:
+      #   - Semver tags from Git version tags (v1.2.3 → 1.2.3, 1.2, 1)
+      #   - 'latest' on pushes to main and scheduled runs
+      #   - Short SHA tag on every build for traceability
+      # -----------------------------------------------------------------------
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@902fa8ec7d6ecbea8a43bf4949c8886e1f02b8c0 # v5.7.0
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            # Semver tags from Git version tags (e.g. v1.2.3)
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            # 'latest' on pushes to main and scheduled runs
+            type=raw,value=latest,enable={{is_default_branch}}
+            # Short SHA for full traceability on every build
+            type=sha,format=short
+
+      # -----------------------------------------------------------------------
+      # Build and push
+      # - Multi-platform: linux/amd64 + linux/arm64
+      # - Push is skipped on PRs (validation build only)
+      # - GHA cache keeps rebuild times fast for unchanged layers
+      # - context: . is explicit so .dockerignore is respected
+      # -----------------------------------------------------------------------
+      - name: Build and push Docker image
+        id: build-and-push
+        uses: docker/build-push-action@14487ce63c7a62a4a324b0bfb37086795e31c6c1 # v6.16.0
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # -----------------------------------------------------------------------
+      # Cosign image signing
+      # Signs the published image digest against the Sigstore/Fulcio public
+      # transparency log, providing cryptographic proof that this image was
+      # built by this pipeline and has not been tampered with.
+      # Skipped on PRs since no image was pushed.
+      # -----------------------------------------------------------------------
+      - name: Sign the published Docker image
+        if: github.event_name != 'pull_request'
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          DIGEST: ${{ steps.build-and-push.outputs.digest }}
+        run: echo "${TAGS}" | xargs -I {} cosign sign --yes {}@${DIGEST}
+
+      # -----------------------------------------------------------------------
+      # Docker Hub README sync
+      # Keeps the Docker Hub repository description in sync with README.md.
+      # Skipped on PRs — there is nothing to sync before a merge.
+      # -----------------------------------------------------------------------
+      - name: Sync README to Docker Hub
+        if: github.event_name != 'pull_request'
+        uses: peter-evans/dockerhub-description@432a30c9e07499fd01da8f8f39a38e82731b93fb # v4.0.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: ${{ env.IMAGE_NAME }}
+          readme-filepath: ./README.md

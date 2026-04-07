@@ -1,0 +1,51 @@
+# =============================================================================
+# DevOps Toolbox — Ansible Toolbox-Level Collections
+# =============================================================================
+# These collections are installed into the image at build time via:
+#   ansible-galaxy collection install -r dependencies/ansible-requirements.yml
+#
+# They are available immediately in every container session without any
+# additional installation step.
+#
+# SCOPE: This file is for collections that are universally useful across
+# most Ansible work — general utilities, Linux system management, and the
+# cloud/k8s integrations that match the tools installed in this image.
+# It is NOT for collections tied to a specific project or environment.
+#
+# Project-specific collections belong in a project-level requirements file,
+# installed via postCreateCommand:
+#   ansible-galaxy collection install -r requirements.yml
+#
+# VERSIONING: Collections are pinned to a minimum compatible version (>=)
+# combined with a version cap (,<) to prevent silent major-version jumps
+# during scheduled image rebuilds while still picking up patch releases.
+# =============================================================================
+
+collections:
+
+  # --- General purpose utilities ---------------------------------------------
+  # Provides a large library of modules and plugins not included in ansible-core:
+  # community.general covers archive, filesize, json_query, mail, and hundreds
+  # of other commonly used modules.
+  - name: community.general
+    version: ">=12.0.0,<13.0.0"
+
+  # --- POSIX / Linux system management ---------------------------------------
+  # Provides modules for managing POSIX-compliant systems: mount, sysctl,
+  # at, cron, acl, and authorized_key among others.
+  - name: ansible.posix
+    version: ">=2.0.0,<3.0.0"
+
+  # --- Kubernetes / Helm management ------------------------------------------
+  # Provides the k8s, helm, k8s_info, and k8s_exec modules for interacting
+  # with Kubernetes clusters. Pairs with the 'kubernetes' Python package
+  # injected via python-requirements.txt.
+  - name: kubernetes.core
+    version: ">=6.3.0,<7.0.0"
+
+  # --- AWS integration -------------------------------------------------------
+  # Provides modules for managing AWS resources (ec2, s3, route53, iam, etc.)
+  # and the AWS dynamic inventory plugin. Pairs with boto3 injected via
+  # python-requirements.txt.
+  - name: amazon.aws
+    version: ">=11.2.0,<12.0.0"

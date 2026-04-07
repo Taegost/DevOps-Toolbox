@@ -1,0 +1,42 @@
+# =============================================================================
+# DevOps Toolbox — Docker Build Context Exclusions
+# =============================================================================
+# Files and directories listed here are excluded from the build context sent
+# to the Docker daemon. This keeps builds fast and prevents unnecessary or
+# sensitive files from being accidentally copied into the image.
+#
+# Note: The Dockerfile uses explicit COPY instructions for everything it needs
+# from the dependencies/ directory, so only those files enter the image.
+# This file primarily protects against accidental inclusion of editor
+# artifacts, secrets, and local tooling state.
+# =============================================================================
+
+# --- Version control ---------------------------------------------------------
+.git
+.gitignore
+
+# --- GitHub Actions ----------------------------------------------------------
+# The pipeline definition has no role inside the image itself
+.github
+
+# --- Dev container config ----------------------------------------------------
+# The .devcontainer folder is for VS Code tooling, not the image build
+.devcontainer
+
+# --- Local environment and secrets -------------------------------------------
+# .env is gitignored but double-listed here as a safety net
+.env
+*.env
+
+# --- Editor and OS artifacts -------------------------------------------------
+.vscode
+.idea
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# --- Documentation -----------------------------------------------------------
+README.md
+CHANGELOG.md
+LICENSE
