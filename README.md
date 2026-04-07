@@ -161,7 +161,7 @@ devops-toolbox/
 │   └── devcontainer.json         # VS Code config for this repo
 ├── dependencies/
 │   ├── ansible-requirements.yml  # Toolbox-level Ansible collections
-│   └── python-ansible-requirements.txt  # Packages injected into Ansible venv
+│   ├── python-ansible-requirements.txt  # Packages injected into Ansible venv
 │   └── python-dev-requirements.txt      # Python development tooling
 ├── Dockerfile                    # Image definition
 ├── .dockerignore                 # Build context exclusions
