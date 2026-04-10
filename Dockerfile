@@ -182,6 +182,17 @@ RUN ansible-galaxy collection install \
     && rm /tmp/ansible-requirements.yml
 
 # -----------------------------------------------------------------------------
+# Azure collection Python dependencies
+# The azure.azcollection ships its own requirements file inside the installed
+# collection directory. These must be installed separately after the collection
+# is installed — they cannot be pre-listed in python-ansible-requirements.txt
+# because the file doesn't exist until the collection is installed, and the
+# package versions are tightly managed by the collection itself.
+# -----------------------------------------------------------------------------
+RUN pipx runpip ansible install \
+    -r /usr/local/pipx/venvs/ansible/lib/python${PYTHON_VERSION}/site-packages/ansible_collections/azure/azcollection/requirements.txt
+
+# -----------------------------------------------------------------------------
 # Azure CLI
 # Installed via Microsoft's official apt repository rather than a raw binary.
 # Azure CLI is a Python application with many components — the apt package

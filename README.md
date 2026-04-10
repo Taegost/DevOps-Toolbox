@@ -35,6 +35,7 @@ with Docker and VS Code — no local setup required.
 | `ansible.posix` | POSIX/Linux system management |
 | `kubernetes.core` | Kubernetes and Helm management |
 | `amazon.aws` | AWS resource management |
+| `azure.azcollection` | Azure resource management |
 
 ### Python Packages (Ansible)
 
@@ -46,7 +47,8 @@ with Docker and VS Code — no local setup required.
 | `passlib` | Password hashing — required by Ansible `user` module |
 | `google-auth` | Google authentication — required by `google.cloud.*` modules |
 | `requests` | HTTP library — required by GCP inventory plugins |
-
+| `PyGithub` | GitHub API client — required by `community.general` GitHub modules |
+| `azure-*` | Azure SDK packages — required by `azure.azcollection` (installed from collection's own requirements file) |
 ---
 
 ## Cloud CLI Authentication

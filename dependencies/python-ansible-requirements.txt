@@ -45,3 +45,7 @@ passlib~=1.7.4
 # and the GCP dynamic inventory plugin.
 google-auth~=2.0
 requests~=2.32.0
+
+# GitHub API — required by community.general GitHub modules
+# (github_repo, github_release, github_webhook, etc.)
+PyGithub~=2.0
