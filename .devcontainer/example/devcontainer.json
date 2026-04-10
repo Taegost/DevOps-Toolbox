@@ -33,7 +33,9 @@
     // kubectl access to your cluster
     "source=${localEnv:HOME}/.kube,target=/home/vscode/.kube,type=bind,readonly",
     // SSH keys for Ansible and Git operations
-    "source=${localEnv:HOME}/.ssh,target=/home/vscode/.ssh,type=bind,readonly"
+    "source=${localEnv:HOME}/.ssh,target=/home/vscode/.ssh,type=bind,readonly",
+    // AWS credentials for the AWS CLI
+    "source=${localEnv:HOME}/.aws,target=/home/vscode/.aws,type=bind,readonly"
   ],
 
   // Run as the non-root 'vscode' user created by the base image.

@@ -17,20 +17,33 @@ FROM mcr.microsoft.com/devcontainers/base:ubuntu-24.04
 # To override during a local build:
 #   docker build --build-arg TERRAFORM_VERSION=1.10.0 -t devops-toolbox .
 # -----------------------------------------------------------------------------
-ARG ANSIBLE_VERSION=13.5.0
+
+# Cloud cli tools
+ARG AWS_CLI_VERSION=2.34.28
+ARG AZURE_CLI_VERSION=2.85.0
+ARG GCLOUD_VERSION=564.0.0
+ARG GH_VERSION=2.89.0
+
+# Containerization tools
 ARG K9S_VERSION=v0.50.18
 ARG KUBECTL_VERSION=v1.35.3
-ARG DOTNET_VERSION=10.0.201
-ARG PYTHON_VERSION=3.12
+
+# Infrastructure as code tools
+ARG ANSIBLE_VERSION=13.5.0
 ARG TERRAFORM_VERSION=1.14.8
 
-# Prevent interactive prompts during apt operations
-ENV DEBIAN_FRONTEND=noninteractive
+# Programming languages
+ARG DOTNET_VERSION=10.0.201
+ARG PYTHON_VERSION=3.12
 
 # -----------------------------------------------------------------------------
 # System packages
 # Installed in a single layer to minimize image size.
 # -----------------------------------------------------------------------------
+
+# Prevent interactive prompts during apt operations
+ENV DEBIAN_FRONTEND=noninteractive
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # Core utilities
     unzip \
@@ -169,19 +182,148 @@ RUN ansible-galaxy collection install \
     && rm /tmp/ansible-requirements.yml
 
 # -----------------------------------------------------------------------------
+# Azure CLI
+# Installed via Microsoft's official apt repository rather than a raw binary.
+# Azure CLI is a Python application with many components — the apt package
+# handles all dependencies cleanly and is the officially recommended method
+# for Ubuntu. This is an exception to the binary-install pattern used by
+# other tools in this image.
+#
+# Telemetry is disabled via environment variable at the end of this block.
+# -----------------------------------------------------------------------------
+RUN curl -fsSL https://packages.microsoft.com/keys/microsoft.asc \
+    | gpg --dearmor \
+    | tee /etc/apt/keyrings/microsoft.gpg > /dev/null \
+    && echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/microsoft.gpg] \
+    https://packages.microsoft.com/repos/azure-cli/ \
+    $(lsb_release -cs) main" \
+    | tee /etc/apt/sources.list.d/azure-cli.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+    azure-cli=${AZURE_CLI_VERSION}-1* \
+    && rm -rf /var/lib/apt/lists/* \
+    && az version
+ENV AZURE_CORE_COLLECT_TELEMETRY=false
+
+# -----------------------------------------------------------------------------
+# gcloud CLI (Google Cloud SDK)
+# Installed via Google's versioned archive rather than the apt repository or
+# the interactive installer script. The versioned archive is the recommended
+# method for automated, reproducible installations where a specific version
+# must be pinned.
+#
+# Installed to /usr/local/google-cloud-sdk. The bin directory is added to
+# PATH so gcloud, gsutil, and bq are available system-wide.
+#
+# Note: gcloud is an SDK with a Python runtime and component manager —
+# it is not a single binary. Completions are sourced from within the SDK
+# directory rather than written to /etc/bash_completion.d.
+# -----------------------------------------------------------------------------
+ENV CLOUDSDK_ROOT_DIR="/usr/local/google-cloud-sdk"
+RUN curl -fsSL \
+    "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-${GCLOUD_VERSION}-linux-x86_64.tar.gz" \
+    -o /tmp/google-cloud-sdk.tar.gz \
+    && tar -xzf /tmp/google-cloud-sdk.tar.gz -C /usr/local \
+    && rm /tmp/google-cloud-sdk.tar.gz \
+    && ${CLOUDSDK_ROOT_DIR}/install.sh \
+    --quiet \
+    --usage-reporting=false \
+    --path-update=false \
+    --bash-completion=false \
+    && ${CLOUDSDK_ROOT_DIR}/bin/gcloud version
+ENV PATH="${CLOUDSDK_ROOT_DIR}/bin:${PATH}"
+# Disable gcloud's interactive update prompts and telemetry
+ENV CLOUDSDK_CORE_DISABLE_PROMPTS=1
+
+# -----------------------------------------------------------------------------
+# GitHub CLI (gh)
+# Installed via official GitHub binary release — single static binary,
+# same pattern as kubectl and k9s.
+# -----------------------------------------------------------------------------
+RUN curl -fsSL \
+    "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_amd64.tar.gz" \
+    -o /tmp/gh.tar.gz \
+    && tar -xzf /tmp/gh.tar.gz -C /tmp \
+    && mv /tmp/gh_${GH_VERSION}_linux_amd64/bin/gh /usr/local/bin/gh \
+    && rm -rf /tmp/gh.tar.gz /tmp/gh_${GH_VERSION}_linux_amd64 \
+    && chmod +x /usr/local/bin/gh \
+    && gh version
+
+# -----------------------------------------------------------------------------
+# AWS CLI v2
+# Installed via AWS's official versioned zip installer. AWS CLI v2 is not a
+# single static binary — it installs to /usr/local/aws-cli and creates a
+# symlink at /usr/local/bin/aws. The versioned installer URL allows exact
+# version pinning consistent with the other tools in this image.
+#
+# AWS CLI v2 ships its own embedded Python runtime and does not interact
+# with the system Python or boto3 installations.
+# -----------------------------------------------------------------------------
+RUN curl -fsSL \
+    "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-${AWS_CLI_VERSION}.zip" \
+    -o /tmp/awscliv2.zip \
+    && unzip /tmp/awscliv2.zip -d /tmp \
+    && /tmp/aws/install \
+        --bin-dir /usr/local/bin \
+        --install-dir /usr/local/aws-cli \
+    && rm -rf /tmp/awscliv2.zip /tmp/aws \
+    && aws --version
+
+# -----------------------------------------------------------------------------
 # Shell completions
 # Written to the system-wide completions directory so they are available to
 # all users and all terminal sessions without any per-user configuration.
 # This avoids the fragility of writing to ~/.bashrc at build time.
 # -----------------------------------------------------------------------------
-RUN mkdir -p /etc/bash_completion.d \
-    # kubectl completions
-    && kubectl completion bash > /etc/bash_completion.d/kubectl \
-    # Terraform completions (exits non-zero if already present, hence || true)
-    && terraform -install-autocomplete || true \
-    # Ansible completions via argcomplete
-    && pipx inject ansible argcomplete \
+
+# -----------------------------------------------------------------------------
+# Shell completions — kubectl
+# -----------------------------------------------------------------------------
+RUN kubectl completion bash > /etc/bash_completion.d/kubectl
+
+# -----------------------------------------------------------------------------
+# Shell completions — Terraform
+# Exits non-zero if already present, hence || true
+# -----------------------------------------------------------------------------
+RUN terraform -install-autocomplete || true
+
+# -----------------------------------------------------------------------------
+# Shell completions — Ansible
+# -----------------------------------------------------------------------------
+RUN pipx inject ansible argcomplete \
     && activate-global-python-argcomplete --dest=/etc/bash_completion.d
+
+# -----------------------------------------------------------------------------
+# Shell completions — Azure CLI
+# The apt package automatically installs the completion script to
+# /etc/bash_completion.d/ during installation — no additional step needed.
+# -----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
+# Shell completions — gcloud
+# Symlinked from within the SDK directory rather than generated
+# -----------------------------------------------------------------------------
+RUN ln -s ${CLOUDSDK_ROOT_DIR}/completion.bash.inc /etc/bash_completion.d/gcloud
+
+# -----------------------------------------------------------------------------
+# Shell completions — GitHub CLI
+# -----------------------------------------------------------------------------
+RUN gh completion -s bash > /etc/bash_completion.d/gh
+
+# -----------------------------------------------------------------------------
+# Shell completions — AWS CLI
+# Uses aws_completer binary rather than a generated script
+# -----------------------------------------------------------------------------
+RUN aws_completer_path=$(which aws_completer) \
+    && echo "complete -C '${aws_completer_path}' aws" \
+        > /etc/bash_completion.d/aws
+
+# -----------------------------------------------------------------------------
+# Shell completion loading
+# Ensures bash-completion is sourced for all interactive shell sessions
+# -----------------------------------------------------------------------------
+RUN echo '\n# Load bash completions\nif [ -f /usr/share/bash-completion/bash_completion ]; then\n    . /usr/share/bash-completion/bash_completion\nfi' \
+    >> /etc/bash.bashrc
 
 # -----------------------------------------------------------------------------
 # Shell completion loading
@@ -190,7 +332,7 @@ RUN mkdir -p /etc/bash_completion.d \
 # loaded if the bash-completion package is explicitly sourced at shell startup.
 # -----------------------------------------------------------------------------
 RUN echo '\n# Load bash completions\nif [ -f /usr/share/bash-completion/bash_completion ]; then\n    . /usr/share/bash-completion/bash_completion\nfi' \
-    >> /etc/bash.bashrc
+>> /etc/bash.bashrc 
 
 # -----------------------------------------------------------------------------
 # Final ownership and user setup

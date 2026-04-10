@@ -19,9 +19,13 @@ with Docker and VS Code — no local setup required.
 | [Ansible](https://www.ansible.com) | See [Dockerfile](./Dockerfile) | Configuration management and automation |
 | [.NET SDK](https://dotnet.microsoft.com) | See [Dockerfile](./Dockerfile) | .NET development |
 | [Python](https://www.python.org) | See [Dockerfile](./Dockerfile) | Scripting and development |
-| [ipython](https://ipython.org) | See [dependencies/python-dev-requirements.txt](./dependencies/python-dev-requirements.txt) | Enhanced Python REPL |
-| [pytest](https://pytest.org) | See [dependencies/python-dev-requirements.txt](./dependencies/python-dev-requirements.txt) | Python testing |
-| [black](https://black.readthedocs.io) | See [dependencies/python-dev-requirements.txt](./dependencies/python-dev-requirements.txt) | Python code formatting |
+| [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/) | See [Dockerfile](./Dockerfile) | Azure resource management |
+| [gcloud CLI](https://cloud.google.com/sdk/gcloud) | See [Dockerfile](./Dockerfile) | Google Cloud resource management |
+| [GitHub CLI](https://cli.github.com) | See [Dockerfile](./Dockerfile) | GitHub workflow management |
+| [AWS CLI](https://aws.amazon.com/cli/) | See [Dockerfile](./Dockerfile) | AWS resource management |
+| [ipython](https://ipython.org) | See [dependencies/](./dependencies/) | Enhanced Python REPL |
+| [pytest](https://pytest.org) | See [dependencies/](./dependencies/) | Python testing |
+| [black](https://black.readthedocs.io) | See [dependencies/](./dependencies/) | Python code formatting |
 
 ### Ansible Collections
 
@@ -40,14 +44,60 @@ with Docker and VS Code — no local setup required.
 | `kubernetes` | Kubernetes client — required by `kubernetes.core` collection |
 | `netaddr` | Network address manipulation — required by network filters |
 | `passlib` | Password hashing — required by Ansible `user` module |
+| `google-auth` | Google authentication — required by `google.cloud.*` modules |
+| `requests` | HTTP library — required by GCP inventory plugins |
+
+---
+
+## Cloud CLI Authentication
+
+The four cloud CLIs require credentials to interact with their respective
+platforms. None of these are baked into the image — credentials are always
+provided at runtime via mounts or environment variables.
+
+**AWS CLI** — mount your credentials file, or pass environment variables:
+```json
+"mounts": [
+"source=${localEnv:HOME}/.aws,target=/home/vscode/.aws,type=bind,readonly"
+]
+```
+Or use environment variables in `devcontainer.json`:
+```json
+"containerEnv": {
+  "AWS_ACCESS_KEY_ID": "${localEnv:AWS_ACCESS_KEY_ID}",
+  "AWS_SECRET_ACCESS_KEY": "${localEnv:AWS_SECRET_ACCESS_KEY}",
+  "AWS_DEFAULT_REGION": "${localEnv:AWS_DEFAULT_REGION}"
+}
+```
+
+**Azure CLI** — run `az login` interactively inside the container after it starts. The credentials are cached in `~/.azure` inside the container session.
+
+**gcloud CLI** — run `gcloud auth login` interactively inside the container after it starts. The credentials are cached in `~/.config/gcloud` inside the container session. For service account authentication, mount your key file:
+```json
+"mounts": [
+  "source=/path/to/sa-key.json,target=/home/vscode/sa-key.json,type=bind,readonly"
+],
+"containerEnv": {
+  "GOOGLE_APPLICATION_CREDENTIALS": "/home/vscode/sa-key.json"
+}
+```
+
+**GitHub CLI** — run `gh auth login` interactively inside the container after it starts, or mount your hosts configuration:
+```json
+"mounts": [
+  "source=${localEnv:HOME}/.config/gh,target=/home/vscode/.config/gh,type=bind,readonly"
+]
+```
 
 ---
 
 ## Using This Image in a Project
 
-Add a `.devcontainer/devcontainer.json` to your project repository with the
-following content. VS Code will detect it automatically and offer to reopen
-the project inside the container.
+Add the [Dev Containers](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers) extension from Microsoft to VS Code.
+
+Then, add a `.devcontainer/devcontainer.json` to your project repository with the. VS Code will detect it automatically and offer to reopen the project inside the container.
+
+**NOTE:** This is just a quick example. For the latest, fully detailed version of the sample, please see [the devcontainer.json in source control](./.devcontainer/example/devcontainer.json)
 
 ```json
 {
