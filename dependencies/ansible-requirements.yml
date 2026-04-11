@@ -49,3 +49,11 @@ collections:
   # python-requirements.txt.
   - name: amazon.aws
     version: ">=11.2.0,<12.0.0"
+
+  # --- Azure management -----------------------------------------------------
+  # Provides modules for managing Azure resources (VMs, storage, networking,
+  # AKS, etc.) and the Azure dynamic inventory plugin.
+  # NOTE: This collection requires additional Python packages installed
+  # separately — see the Dockerfile for the post-install pip step.
+  - name: azure.azcollection
+    version: ">=3.0.0,<4.0.0"

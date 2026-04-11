@@ -40,3 +40,12 @@ netaddr~=1.3.0
 # passwords (password_hash filter). Without this, password hashing tasks
 # will fail with a missing dependency error.
 passlib~=1.7.4
+
+# Google Cloud Python SDK — required by google.cloud.* Ansible modules
+# and the GCP dynamic inventory plugin.
+google-auth~=2.0
+requests~=2.32.0
+
+# GitHub API — required by community.general GitHub modules
+# (github_repo, github_release, github_webhook, etc.)
+PyGithub~=2.0
