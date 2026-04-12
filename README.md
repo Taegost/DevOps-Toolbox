@@ -102,6 +102,12 @@ Or use environment variables in `devcontainer.json`:
 
 Add the [Dev Containers](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers) extension from Microsoft to VS Code.
 
+**NOTE:** If you're running this in WSL through VS Code, you should change these settings:
+```
+Enable Dev › Containers: Execute In WSL
+Enable Dev › Containers: Forward WSL Services if you use things like X, Wayland, or SSH Agents such as Bitwarden
+```
+
 Then, add a `.devcontainer/devcontainer.json` to your project repository with the. VS Code will detect it automatically and offer to reopen the project inside the container.
 
 **NOTE:** This is just a quick example. For the latest, fully detailed version of the sample, please see [the devcontainer.json in source control](./.devcontainer/example/devcontainer.json)
