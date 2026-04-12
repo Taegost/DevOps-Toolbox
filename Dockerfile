@@ -35,6 +35,8 @@ ARG GH_VERSION=2.89.0
 # Containerization tools
 ARG K9S_VERSION=v0.50.18
 ARG KUBECTL_VERSION=v1.35.3
+# The kubeseal version specifically does NOT have the v prefix
+ARG KUBESEAL_VERSION=0.36.6
 
 # Infrastructure as code tools
 ARG ANSIBLE_VERSION=13.5.0
@@ -112,6 +114,7 @@ ENV PIPX_BIN_DIR="/usr/local/bin"
 # Terraform
 # Installed via HashiCorp's official binary release (not apt) so we can pin
 # to an exact patch version rather than relying on repo availability.
+# URL: https://developer.hashicorp.com/terraform
 # -----------------------------------------------------------------------------
 RUN curl -fsSL \
     "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_${TARGETARCH}.zip" \
@@ -124,6 +127,7 @@ RUN curl -fsSL \
 # -----------------------------------------------------------------------------
 # kubectl
 # Installed via official Kubernetes binary release for exact version pinning.
+# URL: https://kubernetes.io/docs/tasks/tools/install-kubectl-linux/
 # -----------------------------------------------------------------------------
 RUN curl -fsSL \
     "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${TARGETARCH}/kubectl" \
@@ -136,6 +140,7 @@ RUN curl -fsSL \
 # Terminal UI for Kubernetes cluster management. Installed via GitHub release
 # binary — no official apt package exists. Pinned for the same reproducibility
 # reasons as all other binary tools in this image.
+# URL: https://github.com/derailed/k9s
 # -----------------------------------------------------------------------------
 RUN curl -fsSL \
     "https://github.com/derailed/k9s/releases/download/${K9S_VERSION}/k9s_Linux_${TARGETARCH}.tar.gz" \
@@ -144,6 +149,19 @@ RUN curl -fsSL \
     && rm /tmp/k9s.tar.gz \
     && chmod +x /usr/local/bin/k9s \
     && k9s version
+
+# -----------------------------------------------------------------------------
+# kubeseal
+# Tool used to manage SealedSecrets in a Kubernetes cluster. Installed via
+# GitHub release binary — no official apt package exists. 
+# URL: https://github.com/bitnami-labs/sealed-secrets
+# -----------------------------------------------------------------------------
+
+RUN curl -OL "https://github.com/bitnami-labs/sealed-secrets/releases/download/v${KUBESEAL_VERSION}/kubeseal-${KUBESEAL_VERSION}-linux-${TARGETARCH}.tar.gz" \
+    && tar -xvzf kubeseal-${KUBESEAL_VERSION}-linux-${TARGETARCH}.tar.gz kubeseal \
+    && install -m 755 kubeseal /usr/local/bin/kubeseal \
+    && rm kubeseal \
+    && rm kubeseal-${KUBESEAL_VERSION}-linux-amd64.tar.gz
 
 # -----------------------------------------------------------------------------
 # Python development tooling

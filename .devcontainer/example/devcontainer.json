@@ -24,8 +24,9 @@
 
   // Mount the workspace into /workspace inside the container.
   // This is where VS Code will open the terminal and where your files live.
-  "workspaceFolder": "/workspace",
-  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
+  // Use this when you need to override the default mount behavior
+  // "workspaceFolder": "/workspace",
+  // "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
 
   // Mount credentials read-only so tooling inside the container can use them.
   // These are never copied into the image — they exist only in the live session.
