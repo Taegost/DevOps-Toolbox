@@ -16,6 +16,11 @@ with Docker and VS Code — no local setup required.
 | [Terraform](https://www.terraform.io) | See [Dockerfile](./Dockerfile) | Infrastructure as code |
 | [kubectl](https://kubernetes.io/docs/reference/kubectl/) | See [Dockerfile](./Dockerfile) | Kubernetes cluster management |
 | [k9s](https://k9scli.io) | See [Dockerfile](./Dockerfile) | Kubernetes terminal UI |
+| [kubeseal](https://github.com/bitnami-labs/sealed-secrets) | See [Dockerfile](./Dockerfile) | Kubernetes SealedSecrets CLI |
+| [Helm](https://helm.sh) | See [Dockerfile](./Dockerfile) | Kubernetes package manager |
+| [kubelogin](https://azure.github.io/kubelogin/) | See [Dockerfile](./Dockerfile) | Azure AD authentication for kubectl |
+| [Kustomize](https://kustomize.io) | See [Dockerfile](./Dockerfile) | Kubernetes configuration management |
+| [Stern](https://github.com/stern/stern) | See [Dockerfile](./Dockerfile) | Multi-pod log tailing |
 | [Ansible](https://www.ansible.com) | See [Dockerfile](./Dockerfile) | Configuration management and automation |
 | [.NET SDK](https://dotnet.microsoft.com) | See [Dockerfile](./Dockerfile) | .NET development |
 | [Python](https://www.python.org) | See [Dockerfile](./Dockerfile) | Scripting and development |
@@ -97,6 +102,12 @@ Or use environment variables in `devcontainer.json`:
 
 Add the [Dev Containers](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers) extension from Microsoft to VS Code.
 
+**NOTE:** If you're running this in WSL through VS Code, you should change these settings:
+```
+Enable Dev › Containers: Execute In WSL
+Enable Dev › Containers: Forward WSL Services if you use things like X, Wayland, or SSH Agents such as Bitwarden
+```
+
 Then, add a `.devcontainer/devcontainer.json` to your project repository with the. VS Code will detect it automatically and offer to reopen the project inside the container.
 
 **NOTE:** This is just a quick example. For the latest, fully detailed version of the sample, please see [the devcontainer.json in source control](./.devcontainer/example/devcontainer.json)
@@ -107,10 +118,6 @@ Then, add a `.devcontainer/devcontainer.json` to your project repository with th
   "image": "taegost/devops-toolbox:latest",
   "workspaceFolder": "/workspace",
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
-  "mounts": [
-    "source=${localEnv:HOME}/.kube,target=/home/vscode/.kube,type=bind,readonly",
-    "source=${localEnv:HOME}/.ssh,target=/home/vscode/.ssh,type=bind,readonly"
-  ],
   "remoteUser": "vscode",
   "customizations": {
     "vscode": {
@@ -175,13 +182,22 @@ the most recent base image security patches, even without a code change.
 
 ## Updating Tool Versions
 
-All tool versions are pinned as `ARG` declarations at the top of the
-[Dockerfile](./Dockerfile). To update a tool:
+Tool versions are pinned as `ARG` declarations directly above each tool's
+install block in the [Dockerfile](./Dockerfile), rather than grouped at the
+top of the file. This is intentional — it ensures that changing one tool's
+version only invalidates the Docker layer cache from that tool downward,
+leaving unrelated tools fully cached.
 
-1. Update the relevant `ARG` value in the Dockerfile
+1. Find the tool's `ARG` declaration in the Dockerfile — it will be
+   immediately above its install block, with a comment header identifying
+   the tool
 2. Update the matching entry in [`.env.example`](./.env.example)
 3. Open a pull request — the pipeline will build and validate the image
 4. Merge and tag a new release (ex. `v1.1.0`) to publish semver tags
+
+To find a tool's current version quickly without reading the full Dockerfile,
+check [`.env.example`](./.env.example) — it mirrors all version pins and
+includes links to each tool's release page.
 
 ---
 
