@@ -161,7 +161,7 @@ RUN curl -OL "https://github.com/bitnami-labs/sealed-secrets/releases/download/v
     && tar -xvzf kubeseal-${KUBESEAL_VERSION}-linux-${TARGETARCH}.tar.gz kubeseal \
     && install -m 755 kubeseal /usr/local/bin/kubeseal \
     && rm kubeseal \
-    && rm kubeseal-${KUBESEAL_VERSION}-linux-amd64.tar.gz
+    && rm kubeseal-${KUBESEAL_VERSION}-linux-${TARGETARCH}..tar.gz
 
 # -----------------------------------------------------------------------------
 # Python development tooling
