@@ -20,6 +20,7 @@ with Docker and VS Code — no local setup required.
 | [Helm](https://helm.sh) | See [Dockerfile](./Dockerfile) | Kubernetes package manager |
 | [kubelogin](https://azure.github.io/kubelogin/) | See [Dockerfile](./Dockerfile) | Azure AD authentication for kubectl |
 | [Kustomize](https://kustomize.io) | See [Dockerfile](./Dockerfile) | Kubernetes configuration management |
+| [ArgoCD CLI](https://argocd.io) | See [Dockerfile](./Dockerfile) | ArgoCD CLI |
 | [Stern](https://github.com/stern/stern) | See [Dockerfile](./Dockerfile) | Multi-pod log tailing |
 | [Ansible](https://www.ansible.com) | See [Dockerfile](./Dockerfile) | Configuration management and automation |
 | [.NET SDK](https://dotnet.microsoft.com) | See [Dockerfile](./Dockerfile) | .NET development |
@@ -108,7 +109,7 @@ Enable Dev › Containers: Execute In WSL
 Enable Dev › Containers: Forward WSL Services if you use things like X, Wayland, or SSH Agents such as Bitwarden
 ```
 
-Then, add a `.devcontainer/devcontainer.json` to your project repository with the. VS Code will detect it automatically and offer to reopen the project inside the container.
+Then, add a `.devcontainer/devcontainer.json` to your project repository with the proper updates (if necessary). VS Code will detect it automatically and offer to reopen the project inside the container.
 
 **NOTE:** This is just a quick example. For the latest, fully detailed version of the sample, please see [the devcontainer.json in source control](./.devcontainer/example/devcontainer.json)
 

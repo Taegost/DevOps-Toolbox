@@ -23,7 +23,7 @@
 # --- AWS / Route53 integration -----------------------------------------------
 # Required by Ansible's AWS modules (ec2, s3, route53, etc.) and the AWS
 # dynamic inventory plugin.
-boto3~=1.42.84
+boto3~=1.42.93
 
 # --- Kubernetes integration ---------------------------------------------------
 # Required by the kubernetes.core collection for interacting with the k8s API

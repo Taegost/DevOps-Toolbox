@@ -49,7 +49,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     screen \
     # Network and filesystem utilities
     net-tools \
+    iputils-ping \
+    dnsutils \
+    traceroute \
+    nmap \
+    tcpdump \
+    iproute2 \
     rsync \
+    yq \
     # Disk usage analysis
     ncdu \
     # Python (explicit version from deadsnakes PPA for pinning control)
@@ -193,8 +200,8 @@ RUN pipx runpip ansible install \
 # See dependencies/python-requirements.txt for the full list and rationale.
 # -----------------------------------------------------------------------------
 COPY dependencies/python-ansible-requirements.txt /tmp/python-ansible-requirements.txt
-RUN pipx inject ansible \
-    $(grep -v '^\s*#' /tmp/python-ansible-requirements.txt | grep -v '^\s*$' | tr '\n' ' ') \
+RUN pipx runpip ansible install \
+    -r /tmp/python-ansible-requirements.txt \
     && rm /tmp/python-ansible-requirements.txt
 
 # -----------------------------------------------------------------------------
@@ -337,6 +344,21 @@ RUN curl -fsSL \
     && rm /tmp/kustomize.tar.gz \
     && chmod +x /usr/local/bin/kustomize \
     && kustomize version
+
+# -----------------------------------------------------------------------------
+# ArgoCD CLI
+# Command-line interface for ArgoCD, a GitOps continuous delivery tool for 
+#Kubernetes. Installed via GitHub release binary — no official apt package exists.
+# ArgoCD uses amd64/arm64 naming — maps directly from TARGETARCH.
+# -----------------------------------------------------------------------------
+ARG ARGOCD_VERSION=v3.3.8
+
+RUN curl -fsSL \
+    -o argocd-linux-${TARGETARCH} \
+    "https://github.com/argoproj/argo-cd/releases/download/${ARGOCD_VERSION}/argocd-linux-${TARGETARCH}" \
+    && install -m 555 argocd-linux-${TARGETARCH} /usr/local/bin/argocd \
+    && rm argocd-linux-${TARGETARCH} \
+    && argocd version --client
 
 # -----------------------------------------------------------------------------
 # Stern
