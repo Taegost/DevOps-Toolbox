@@ -20,7 +20,7 @@ with Docker and VS Code — no local setup required.
 | [Helm](https://helm.sh) | See [Dockerfile](./Dockerfile) | Kubernetes package manager |
 | [kubelogin](https://azure.github.io/kubelogin/) | See [Dockerfile](./Dockerfile) | Azure AD authentication for kubectl |
 | [Kustomize](https://kustomize.io) | See [Dockerfile](./Dockerfile) | Kubernetes configuration management |
-| [ArgoCD CLI](argocd.io) | See [Dockerfile](./Dockerfile) | ArgoCD CLI |
+| [ArgoCD CLI](https://argocd.io) | See [Dockerfile](./Dockerfile) | ArgoCD CLI |
 | [Stern](https://github.com/stern/stern) | See [Dockerfile](./Dockerfile) | Multi-pod log tailing |
 | [Ansible](https://www.ansible.com) | See [Dockerfile](./Dockerfile) | Configuration management and automation |
 | [.NET SDK](https://dotnet.microsoft.com) | See [Dockerfile](./Dockerfile) | .NET development |

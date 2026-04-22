@@ -353,11 +353,12 @@ RUN curl -fsSL \
 # -----------------------------------------------------------------------------
 ARG ARGOCD_VERSION=v3.3.8
 
-RUN curl -sSL \
+RUN curl -fsSL \
     -o argocd-linux-${TARGETARCH} \
     "https://github.com/argoproj/argo-cd/releases/download/${ARGOCD_VERSION}/argocd-linux-${TARGETARCH}" \
-    && sudo install -m 555 argocd-linux-${TARGETARCH} /usr/local/bin/argocd \
-    && rm argocd-linux-${TARGETARCH}
+    && install -m 555 argocd-linux-${TARGETARCH} /usr/local/bin/argocd \
+    && rm argocd-linux-${TARGETARCH} \
+    && argocd version
 
 # -----------------------------------------------------------------------------
 # Stern
