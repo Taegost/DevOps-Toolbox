@@ -54,6 +54,21 @@ jobs:
       id-token: write
 
     steps:
+
+      # -----------------------------------------------------------------------
+      # Tag format validation
+      # Fails immediately if the Git tag is not valid semver (vMAJOR.MINOR.PATCH).
+      # Prevents a silent partial push where only the SHA tag is published.
+      # -----------------------------------------------------------------------
+      - name: Validate tag format
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Tag '$TAG' is not valid semver (expected vMAJOR.MINOR.PATCH)"
+            exit 1
+          fi
+
       # -----------------------------------------------------------------------
       # Checkout
       # fetch-depth: 0 is required for the metadata action to correctly resolve
@@ -119,6 +134,21 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
             # Short SHA for full traceability on every build
             type=sha,format=short
+
+      # -----------------------------------------------------------------------
+      # Verify semver tags were generated
+      # Fails if metadata-action produced no non-SHA tags, which happens when
+      # the Git tag is not valid semver. Catches edge cases the validate-tag
+      # job may not cover (e.g. manual workflow_dispatch with a bad tag).
+      # -----------------------------------------------------------------------
+      - name: Verify semver tags were generated
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        run: |
+          TAGS="${{ steps.meta.outputs.tags }}"
+          if ! echo "$TAGS" | grep -qv "sha-"; then
+            echo "::error::No semver tags generated — verify your tag follows vMAJOR.MINOR.PATCH"
+            exit 1
+          fi
 
       # -----------------------------------------------------------------------
       # Build and push
