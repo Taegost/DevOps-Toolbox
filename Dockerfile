@@ -90,12 +90,12 @@ ENV PIPX_BIN_DIR="/usr/local/bin"
 ARG POSTGRESQL_CLIENT_VERSION=18
 
 RUN curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
-    | gpg --dearmor \
-    | tee /etc/apt/keyrings/postgresql.gpg > /dev/null \
-    && echo "deb [arch=${TARGETARCH} signed-by=/etc/apt/keyrings/postgresql.gpg] \
-    https://apt.postgresql.org/pub/repos/apt \
-    $(lsb_release -cs)-pgdg main" \
-    | tee /etc/apt/sources.list.d/postgresql.list \
+    -o /tmp/postgresql.asc \
+    && mkdir -p /etc/apt/keyrings \
+    && gpg --dearmor -o /etc/apt/keyrings/postgresql.gpg /tmp/postgresql.asc \
+    && rm /tmp/postgresql.asc \
+    && echo "deb [arch=${TARGETARCH} signed-by=/etc/apt/keyrings/postgresql.gpg] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+      > /etc/apt/sources.list.d/postgresql.list \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
     postgresql-client-${POSTGRESQL_CLIENT_VERSION} \
