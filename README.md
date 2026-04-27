@@ -29,6 +29,9 @@ with Docker and VS Code — no local setup required.
 | [gcloud CLI](https://cloud.google.com/sdk/gcloud) | See [Dockerfile](./Dockerfile) | Google Cloud resource management |
 | [GitHub CLI](https://cli.github.com) | See [Dockerfile](./Dockerfile) | GitHub workflow management |
 | [AWS CLI](https://aws.amazon.com/cli/) | See [Dockerfile](./Dockerfile) | AWS resource management |
+| [psql](https://www.postgresql.org/docs/current/app-psql.html) | See [Dockerfile](./Dockerfile) | PostgreSQL CLI client |
+| [mariadb / mysql](https://mariadb.org) | See [Dockerfile](./Dockerfile) | MariaDB and MySQL CLI client |
+| [sqlite3](https://sqlite.org) | See [Dockerfile](./Dockerfile) | SQLite CLI client |
 | [ipython](https://ipython.org) | See [dependencies/](./dependencies/) | Enhanced Python REPL |
 | [pytest](https://pytest.org) | See [dependencies/](./dependencies/) | Python testing |
 | [black](https://black.readthedocs.io) | See [dependencies/](./dependencies/) | Python code formatting |

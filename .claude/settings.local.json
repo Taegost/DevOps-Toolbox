@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:mariadb.com)",
+      "WebFetch(domain:downloads.mariadb.com)",
+      "WebFetch(domain:mariadb.org)",
+      "WebFetch(domain:legacy-downloads.mariadb.com)"
+    ]
+  }
+}
