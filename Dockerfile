@@ -99,6 +99,7 @@ RUN curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
     postgresql-client-${POSTGRESQL_CLIENT_VERSION} \
+    && rm -f /etc/apt/sources.list.d/postgresql.list /etc/apt/keyrings/postgresql.gpg \
     && rm -rf /var/lib/apt/lists/* \
     && psql --version
 
