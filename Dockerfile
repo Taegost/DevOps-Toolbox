@@ -59,6 +59,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     yq \
     # Disk usage analysis
     ncdu \
+    # Database clients
+    # mariadb-client is installed here rather than via the MariaDB Foundation's
+    # APT repo (as other tools are) because MariaDB 12.x does not have a stable,
+    # version-addressable APT repository URL. The Ubuntu LTS package is used instead.
+    mariadb-client \
+    sqlite3 \
     # Python (explicit version from deadsnakes PPA for pinning control)
     python${PYTHON_VERSION} \
     python${PYTHON_VERSION}-venv \
@@ -66,13 +72,35 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     pipx \
     # Shell completion framework (required for kubectl/terraform completions)
     bash-completion \
-    && rm -rf /var/lib/apt/lists/* 
+    && rm -rf /var/lib/apt/lists/*
 
 # Ensure pipx binaries are on PATH for all subsequent RUN steps and terminals
 ENV PATH="/root/.local/bin:/home/vscode/.local/bin:${PATH}"
 ENV PIPX_HOME="/usr/local/pipx"
 ENV PIPX_BIN_DIR="/usr/local/bin"
 
+# -----------------------------------------------------------------------------
+# PostgreSQL Client
+# Installed via the PostgreSQL Global Development Group (PGDG) APT repository
+# for exact major-version pinning and access to current point releases.
+# Provides: psql, pg_dump, pg_restore, pg_dumpall.
+# Shell completions are shipped with the package and auto-loaded by
+# bash-completion — no explicit step required.
+# -----------------------------------------------------------------------------
+ARG POSTGRESQL_CLIENT_VERSION=18
+
+RUN curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+    | gpg --dearmor \
+    | tee /etc/apt/keyrings/postgresql.gpg > /dev/null \
+    && echo "deb [arch=${TARGETARCH} signed-by=/etc/apt/keyrings/postgresql.gpg] \
+    https://apt.postgresql.org/pub/repos/apt \
+    $(lsb_release -cs)-pgdg main" \
+    | tee /etc/apt/sources.list.d/postgresql.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+    postgresql-client-${POSTGRESQL_CLIENT_VERSION} \
+    && rm -rf /var/lib/apt/lists/* \
+    && psql --version
 
 # -----------------------------------------------------------------------------
 # .NET SDK
