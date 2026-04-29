@@ -144,10 +144,32 @@ ARG TERRAFORM_VERSION=1.14.8
 RUN curl -fsSL \
     "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_${TARGETARCH}.zip" \
     -o /tmp/terraform.zip \
-    && unzip /tmp/terraform.zip -d /usr/local/bin/ \
+    && unzip /tmp/terraform.zip terraform -d /usr/local/bin/ \
     && rm /tmp/terraform.zip \
     && chmod +x /usr/local/bin/terraform \
     && terraform version
+
+# -----------------------------------------------------------------------------
+# Packer
+# Machine image building tool by HashiCorp. Installed via HashiCorp's official
+# binary release for exact version pinning.
+# Packer uses amd64/arm64 naming — maps directly from TARGETARCH.
+# URL: https://developer.hashicorp.com/packer
+# -----------------------------------------------------------------------------
+ARG PACKER_VERSION=1.15.3
+
+RUN curl -fsSL \
+    "https://releases.hashicorp.com/packer/${PACKER_VERSION}/packer_${PACKER_VERSION}_linux_${TARGETARCH}.zip" \
+    -o /tmp/packer.zip \
+    && curl -fsSL \
+    "https://releases.hashicorp.com/packer/${PACKER_VERSION}/packer_${PACKER_VERSION}_SHA256SUMS" \
+    -o /tmp/packer_SHA256SUMS \
+    && EXPECTED=$(grep "packer_${PACKER_VERSION}_linux_${TARGETARCH}.zip" /tmp/packer_SHA256SUMS | awk '{print $1}') \
+    && echo "${EXPECTED}  /tmp/packer.zip" | sha256sum -c \
+    && unzip /tmp/packer.zip packer -d /usr/local/bin/ \
+    && rm /tmp/packer.zip /tmp/packer_SHA256SUMS \
+    && chmod +x /usr/local/bin/packer \
+    && packer version
 
 # -----------------------------------------------------------------------------
 # GitHub CLI (gh)
@@ -412,6 +434,15 @@ RUN kubectl completion bash > /etc/bash_completion.d/kubectl
 # Exits non-zero if already present, hence || true
 # -----------------------------------------------------------------------------
 RUN terraform -install-autocomplete || true
+
+# -----------------------------------------------------------------------------
+# Shell completions — Packer
+# Uses complete -C (same approach as AWS CLI) rather than -autocomplete-install
+# which only writes to root's shell RC, not system-wide.
+# -----------------------------------------------------------------------------
+RUN packer_path=$(which packer) \
+    && echo "complete -C '${packer_path}' packer" \
+        > /etc/bash_completion.d/packer
 
 # -----------------------------------------------------------------------------
 # Shell completions — Ansible

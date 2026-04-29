@@ -14,6 +14,7 @@ with Docker and VS Code — no local setup required.
 | Tool | Version | Purpose |
 |---|---|---|
 | [Terraform](https://www.terraform.io) | See [Dockerfile](./Dockerfile) | Infrastructure as code |
+| [Packer](https://developer.hashicorp.com/packer) | See [Dockerfile](./Dockerfile) | Machine image building |
 | [kubectl](https://kubernetes.io/docs/reference/kubectl/) | See [Dockerfile](./Dockerfile) | Kubernetes cluster management |
 | [k9s](https://k9scli.io) | See [Dockerfile](./Dockerfile) | Kubernetes terminal UI |
 | [kubeseal](https://github.com/bitnami-labs/sealed-secrets) | See [Dockerfile](./Dockerfile) | Kubernetes SealedSecrets CLI |
