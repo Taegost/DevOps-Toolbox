@@ -161,8 +161,13 @@ ARG PACKER_VERSION=1.15.3
 RUN curl -fsSL \
     "https://releases.hashicorp.com/packer/${PACKER_VERSION}/packer_${PACKER_VERSION}_linux_${TARGETARCH}.zip" \
     -o /tmp/packer.zip \
+    && curl -fsSL \
+    "https://releases.hashicorp.com/packer/${PACKER_VERSION}/packer_${PACKER_VERSION}_SHA256SUMS" \
+    -o /tmp/packer_SHA256SUMS \
+    && EXPECTED=$(grep "packer_${PACKER_VERSION}_linux_${TARGETARCH}.zip" /tmp/packer_SHA256SUMS | awk '{print $1}') \
+    && echo "${EXPECTED}  /tmp/packer.zip" | sha256sum -c \
     && unzip /tmp/packer.zip packer -d /usr/local/bin/ \
-    && rm /tmp/packer.zip \
+    && rm /tmp/packer.zip /tmp/packer_SHA256SUMS \
     && chmod +x /usr/local/bin/packer \
     && packer version
 
@@ -432,9 +437,12 @@ RUN terraform -install-autocomplete || true
 
 # -----------------------------------------------------------------------------
 # Shell completions — Packer
-# Exits non-zero if already present, hence || true
+# Uses complete -C (same approach as AWS CLI) rather than -autocomplete-install
+# which only writes to root's shell RC, not system-wide.
 # -----------------------------------------------------------------------------
-RUN packer -autocomplete-install || true
+RUN packer_path=$(which packer) \
+    && echo "complete -C '${packer_path}' packer" \
+        > /etc/bash_completion.d/packer
 
 # -----------------------------------------------------------------------------
 # Shell completions — Ansible

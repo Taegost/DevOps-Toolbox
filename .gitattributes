@@ -1,0 +1,14 @@
+# Enforce LF line endings for all text files.
+# This repo targets Linux (Docker images) — CRLF in shell scripts or
+# Dockerfiles causes hard-to-diagnose runtime failures inside containers.
+* text=auto eol=lf
+
+# Explicitly mark binary files so Git never attempts line-ending conversion.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.zip binary
+*.gz binary
+*.tar binary
