@@ -79,15 +79,17 @@ Two-stage guard against bad semver tags:
 1. Find the tool's `ARG` in the Dockerfile (directly above its install block)
 2. Update the version value
 3. Update the matching entry in `.env.example`
-4. **MUST:** Stage changes and commit, but do NOT create a PR until the user confirms the Docker build succeeds locally. Wait for the user to smoke test before opening the PR.
-5. After user approval, create the PR — CI validates the build
-6. Merge to main, then tag a new semver release (`v1.2.3`) to publish versioned tags
+4. Commit changes and push the branch
+5. Run the smoke test (see ABSOLUTE DIRECTIVE below) — report the result
+6. Wait for explicit user approval before opening the PR. The user may require additional validation beyond the build.
+7. After user approval, create the PR — CI validates the build
+8. Merge to main, then tag a new semver release (`v1.2.3`) to publish versioned tags
 
 `.env.example` is the quick-reference for current versions — it mirrors all Dockerfile ARGs with links to each tool's release page in comments.
 
 ## ABSOLUTE DIRECTIVE
 
-- **NEVER create a PR for Dockerfile changes without the user first smoke-testing the Docker build locally.** The CI pipeline takes minutes; a local smoke build catches issues faster. Commit the changes, push the branch, but stop before opening the PR. Tell the user the branch is ready for smoke testing and provide the exact build command.
+- **NEVER open a PR for Dockerfile changes without smoke testing first.** The smoke test is `docker build .` — it must complete successfully. Run it, report the result. The PR is gated by user approval; the user may require additional checks beyond the build. Do not open the PR until the user explicitly says to proceed.
 
 ## Key Conventions
 
