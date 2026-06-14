@@ -167,6 +167,7 @@ RUN curl -fsSL \
     "https://github.com/gruntwork-io/terragrunt/releases/download/v${TERRAGRUNT_VERSION}/SHA256SUMS" \
     -o /tmp/terragrunt_SHA256SUMS \
     && EXPECTED=$(grep "terragrunt_linux_${TARGETARCH}$" /tmp/terragrunt_SHA256SUMS | awk '{print $1}') \
+    && [ -n "${EXPECTED}" ] \
     && echo "${EXPECTED}  /tmp/terragrunt" | sha256sum -c \
     && install -m 755 /tmp/terragrunt /usr/local/bin/terragrunt \
     && rm /tmp/terragrunt /tmp/terragrunt_SHA256SUMS \
