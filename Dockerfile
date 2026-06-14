@@ -139,7 +139,7 @@ ENV CLOUDSDK_CORE_DISABLE_PROMPTS=1
 # to an exact patch version rather than relying on repo availability.
 # URL: https://developer.hashicorp.com/terraform
 # -----------------------------------------------------------------------------
-ARG TERRAFORM_VERSION=1.14.8
+ARG TERRAFORM_VERSION=1.15.6
 
 RUN curl -fsSL \
     "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_${TARGETARCH}.zip" \
@@ -148,6 +148,29 @@ RUN curl -fsSL \
     && rm /tmp/terraform.zip \
     && chmod +x /usr/local/bin/terraform \
     && terraform version
+
+# -----------------------------------------------------------------------------
+# Terragrunt
+# Thin wrapper around Terraform and OpenTofu that provides state management,
+# DRY configuration via includes, and CLI ergonomics. Installed via direct
+# binary download from GitHub releases for exact version pinning.
+# Terragrunt uses amd64/arm64 naming — maps directly from TARGETARCH.
+# URL: https://terragrunt.gruntwork.io
+# -----------------------------------------------------------------------------
+# The terragrunt version specifically does NOT have the v prefix
+ARG TERRAGRUNT_VERSION=1.0.8
+
+RUN curl -fsSL \
+    "https://github.com/gruntwork-io/terragrunt/releases/download/v${TERRAGRUNT_VERSION}/terragrunt_linux_${TARGETARCH}" \
+    -o /tmp/terragrunt \
+    && curl -fsSL \
+    "https://github.com/gruntwork-io/terragrunt/releases/download/v${TERRAGRUNT_VERSION}/SHA256SUMS" \
+    -o /tmp/terragrunt_SHA256SUMS \
+    && EXPECTED=$(grep "terragrunt_linux_${TARGETARCH}$" /tmp/terragrunt_SHA256SUMS | awk '{print $1}') \
+    && echo "${EXPECTED}  /tmp/terragrunt" | sha256sum -c \
+    && install -m 755 /tmp/terragrunt /usr/local/bin/terragrunt \
+    && rm /tmp/terragrunt /tmp/terragrunt_SHA256SUMS \
+    && terragrunt --version
 
 # -----------------------------------------------------------------------------
 # Packer
@@ -434,6 +457,14 @@ RUN kubectl completion bash > /etc/bash_completion.d/kubectl
 # Exits non-zero if already present, hence || true
 # -----------------------------------------------------------------------------
 RUN terraform -install-autocomplete || true
+
+# -----------------------------------------------------------------------------
+# Shell completions — Terragrunt
+# Uses --install-autocomplete (same approach as Terraform). If the command
+# writes per-user config rather than system-wide, fall back to the complete -C
+# pattern used by Packer and AWS CLI.
+# -----------------------------------------------------------------------------
+RUN terragrunt --install-autocomplete || true
 
 # -----------------------------------------------------------------------------
 # Shell completions — Packer
