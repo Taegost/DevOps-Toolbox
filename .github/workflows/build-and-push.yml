@@ -1,30 +1,4 @@
-# =============================================================================
-# DevOps Toolbox — Build and Publish Pipeline
-# =============================================================================
-# Builds the DevOps Toolbox image and pushes it to Docker Hub.
-#
-# TRIGGERS:
-#   - Push to main         → builds and pushes with 'latest' tag
-#   - Version tag (v*.*.*)  → builds and pushes with full semver tags
-#   - Pull request to main  → builds only (no push) to validate Dockerfile
-#   - Weekly schedule       → rebuilds to pick up base image security patches
-#   - Manual dispatch       → allows on-demand builds from the Actions tab
-#
-# REQUIRED SECRETS (Settings → Secrets and variables → Actions):
-#   DOCKERHUB_USERNAME   — your Docker Hub username (org-level secret)
-#   DOCKERHUB_TOKEN      — Docker Hub access token, NOT your password (org-level secret)
-#                          Generate at: hub.docker.com → Account Settings → Security
-#   DOCKERHUB_IMAGENAME  — full image path, e.g. yourusername/devops-toolbox (repo-level secret)
-#
-# TAGGING STRATEGY:
-#   Push to main:    latest, sha-<short-commit>
-#   Tag v1.2.3:      1.2.3, 1.2, 1, latest, sha-<short-commit>
-#   Pull request:    no push, build validation only
-#   Scheduled:       latest, sha-<short-commit>
-# =============================================================================
-
 name: Build and Publish
-
 on:
   push:
     tags:
@@ -33,168 +7,18 @@ on:
     branches:
       - main
   schedule:
-    # Weekly rebuild every Monday at 04:00 UTC
-    # Ensures base image security patches are picked up automatically
     - cron: '0 4 * * 1'
   workflow_dispatch:
-
-env:
-  REGISTRY: docker.io
-  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_IMAGENAME }}
-
+    inputs:
+      enable_from_cache:
+        description: 'Read from the Docker layer cache on this manual run (default: false, always pulls fresh base image layers)'
+        required: false
+        default: false
+        type: boolean
 jobs:
   build:
-    name: Build and Push
-    runs-on: ubuntu-latest
-
-    permissions:
-      contents: read
-      packages: write
-      # Required for Cosign OIDC-based signing against Sigstore/Fulcio
-      id-token: write
-
-    steps:
-
-      # -----------------------------------------------------------------------
-      # Tag format validation
-      # Fails immediately if the Git tag is not valid semver (vMAJOR.MINOR.PATCH).
-      # Prevents a silent partial push where only the SHA tag is published.
-      # -----------------------------------------------------------------------
-      - name: Validate tag format
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-        run: |
-          TAG="${GITHUB_REF#refs/tags/}"
-          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::Tag '$TAG' is not valid semver (expected vMAJOR.MINOR.PATCH)"
-            exit 1
-          fi
-
-      # -----------------------------------------------------------------------
-      # Checkout
-      # fetch-depth: 0 is required for the metadata action to correctly resolve
-      # semver tags from the full Git history.
-      # -----------------------------------------------------------------------
-      - name: Checkout repository
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      # -----------------------------------------------------------------------
-      # Cosign — image signing via Sigstore/Fulcio
-      # Skipped on PRs since there is nothing to sign (no push occurs).
-      # -----------------------------------------------------------------------
-      - name: Install Cosign
-        if: github.event_name != 'pull_request'
-        uses: sigstore/cosign-installer@v4.1.1
-
-      # -----------------------------------------------------------------------
-      # Multi-arch setup
-      # QEMU provides CPU emulation so amd64 runners can build arm64 images.
-      # Buildx is the extended Docker build client that enables multi-platform
-      # builds, layer caching, and other BuildKit features.
-      # -----------------------------------------------------------------------
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4.0.0
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4.0.0
-
-      # -----------------------------------------------------------------------
-      # Docker Hub login
-      # Skipped on PRs — credentials are not needed for a build-only run, and
-      # PRs from forks do not have access to secrets anyway.
-      # Uses DOCKERHUB_TOKEN (access token), NOT DOCKERHUB_PASSWORD.
-      # -----------------------------------------------------------------------
-      - name: Log in to Docker Hub
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@v4.1.0
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      # -----------------------------------------------------------------------
-      # Image metadata and tags
-      # Derives tags and labels from the Git context automatically:
-      #   - Semver tags from Git version tags (v1.2.3 → 1.2.3, 1.2, 1)
-      #   - 'latest' on pushes to main and scheduled runs
-      #   - Short SHA tag on every build for traceability
-      # -----------------------------------------------------------------------
-      - name: Extract Docker metadata
-        id: meta
-        uses: docker/metadata-action@v6.0.0
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            # Semver tags from Git version tags (e.g. v1.2.3)
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            # 'latest' on pushes to main and scheduled runs
-            type=raw,value=latest,enable={{is_default_branch}}
-            # Short SHA for full traceability on every build
-            type=sha,format=short
-
-      # -----------------------------------------------------------------------
-      # Verify semver tags were generated
-      # Fails if metadata-action produced no non-SHA tags, which happens when
-      # the Git tag is not valid semver. Catches edge cases the validate-tag
-      # job may not cover (e.g. manual workflow_dispatch with a bad tag).
-      # -----------------------------------------------------------------------
-      - name: Verify semver tags were generated
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-        run: |
-          TAGS="${{ steps.meta.outputs.tags }}"
-          if ! echo "$TAGS" | grep -qv "sha-"; then
-            echo "::error::No semver tags generated — verify your tag follows vMAJOR.MINOR.PATCH"
-            exit 1
-          fi
-
-      # -----------------------------------------------------------------------
-      # Build and push
-      # - Multi-platform: linux/amd64 + linux/arm64
-      # - Push is skipped on PRs (validation build only)
-      # - GHA cache keeps rebuild times fast for unchanged layers
-      # - context: . is explicit so .dockerignore is respected
-      # -----------------------------------------------------------------------
-      - name: Build and push Docker image
-        id: build-and-push
-        uses: docker/build-push-action@v7.0.0
-        with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      # -----------------------------------------------------------------------
-      # Cosign image signing
-      # Signs the published image digest against the Sigstore/Fulcio public
-      # transparency log, providing cryptographic proof that this image was
-      # built by this pipeline and has not been tampered with.
-      # Skipped on PRs since no image was pushed.
-      # -----------------------------------------------------------------------
-      - name: Sign the published Docker image
-        if: github.event_name != 'pull_request'
-        env:
-          TAGS: ${{ steps.meta.outputs.tags }}
-          DIGEST: ${{ steps.build-and-push.outputs.digest }}
-        run: echo "${TAGS}" | xargs -I {} cosign sign --yes --oidc-provider=github-actions {}@${DIGEST}
-
-      # -----------------------------------------------------------------------
-      # Docker Hub README sync
-      # Keeps the Docker Hub repository description in sync with README.md.
-      # Skipped on PRs — there is nothing to sync before a merge.
-      # -----------------------------------------------------------------------
-      - name: Sync README to Docker Hub
-        if: github.event_name != 'pull_request'
-        uses: peter-evans/dockerhub-description@v5.0.0
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-          repository: ${{ env.IMAGE_NAME }}
-          readme-filepath: ./README.md
-          short-description: ${{ github.event.repository.description }}
-          enable-url-completion: true
+    uses: Taegost/shared-workflows/.github/workflows/docker-build-push.yml@v2.0.0
+    with:
+      event_name: ${{ github.event_name }}
+      enable_from_cache: ${{ inputs.enable_from_cache || false }}
+    secrets: inherit
