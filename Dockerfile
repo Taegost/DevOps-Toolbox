@@ -110,6 +110,26 @@ ENV DOTNET_CLI_TELEMETRY_OPTOUT=1
 ENV DOTNET_NOLOGO=1
 
 # -----------------------------------------------------------------------------
+# PowerShell
+# Cross-platform shell and scripting language built on .NET.
+# Installed via Microsoft GitHub releases for exact version pinning.
+# PowerShell uses x64/arm64 naming — maps from TARGETARCH with a remap
+# for amd64 (PowerShell calls it x64).
+# URL: https://github.com/PowerShell/PowerShell
+# -----------------------------------------------------------------------------
+ARG POWERSHELL_VERSION=v7.6.4
+
+RUN PS_ARCH=$([ "${TARGETARCH}" = "arm64" ] && echo "arm64" || echo "x64") \
+    && curl -fsSL \
+    "https://github.com/PowerShell/PowerShell/releases/download/${POWERSHELL_VERSION}/powershell-${POWERSHELL_VERSION#v}-linux-${PS_ARCH}.tar.gz" \
+    -o /tmp/powershell.tar.gz \
+    && mkdir -p /usr/local/pwsh \
+    && tar -xzf /tmp/powershell.tar.gz -C /usr/local/pwsh \
+    && rm /tmp/powershell.tar.gz \
+    && ln -s /usr/local/pwsh/pwsh /usr/local/bin/pwsh \
+    && pwsh --version
+
+# -----------------------------------------------------------------------------
 # gcloud CLI (Google Cloud SDK)
 # Installed via Google's versioned archive for exact version pinning.
 # gcloud uses x86_64/arm naming — does NOT match TARGETARCH directly.
