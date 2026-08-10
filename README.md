@@ -27,6 +27,7 @@ with Docker and VS Code — no local setup required.
 | [Ansible](https://www.ansible.com) | See [Dockerfile](./Dockerfile) | Configuration management and automation |
 | [.NET SDK](https://dotnet.microsoft.com) | See [Dockerfile](./Dockerfile) | .NET development |
 | [Python](https://www.python.org) | See [Dockerfile](./Dockerfile) | Scripting and development |
+| [PowerShell](https://github.com/PowerShell/PowerShell) | See [Dockerfile](./Dockerfile) | Cross-platform shell and scripting |
 | [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/) | See [Dockerfile](./Dockerfile) | Azure resource management |
 | [gcloud CLI](https://cloud.google.com/sdk/gcloud) | See [Dockerfile](./Dockerfile) | Google Cloud resource management |
 | [GitHub CLI](https://cli.github.com) | See [Dockerfile](./Dockerfile) | GitHub workflow management |
