@@ -25,6 +25,7 @@ with Docker and VS Code — no local setup required.
 | [ArgoCD CLI](https://argocd.io) | See [Dockerfile](./Dockerfile) | ArgoCD CLI |
 | [Stern](https://github.com/stern/stern) | See [Dockerfile](./Dockerfile) | Multi-pod log tailing |
 | [Ansible](https://www.ansible.com) | See [Dockerfile](./Dockerfile) | Configuration management and automation |
+| [ansible-lint](https://pypi.org/project/ansible-lint) | See [Dockerfile](./Dockerfile) | Linting for Ansible playbooks and roles |
 | [.NET SDK](https://dotnet.microsoft.com) | See [Dockerfile](./Dockerfile) | .NET development |
 | [Python](https://www.python.org) | See [Dockerfile](./Dockerfile) | Scripting and development |
 | [PowerShell](https://github.com/PowerShell/PowerShell) | See [Dockerfile](./Dockerfile) | Cross-platform shell and scripting |
