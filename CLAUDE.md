@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A Docker image (Dev Container) that bundles pinned versions of DevOps tooling — Terraform, Packer, kubectl, Helm, Ansible, cloud CLIs, database clients, and Python/.NET SDKs. Published to Docker Hub as `taegost/devops-toolbox`. Consumers pull the image into their projects' `.devcontainer/devcontainer.json`.
 
+`docs/solutions/` — documented solutions to past problems (bugs, best practices, tooling decisions, workflow patterns), organized by category with YAML frontmatter (`module`, `tags`, `problem_type`). Relevant when implementing or debugging in documented areas.
+
 ## Build Commands
 
 ```bash
