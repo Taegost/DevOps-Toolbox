@@ -1,6 +1,7 @@
 ---
 title: feat: Add ansible-lint
 type: feat
+status: completed
 date: 2026-09-22
 ---
 
@@ -44,7 +45,7 @@ The image ships Ansible 13.5.0 with baked-in collections but no linter. Playbook
 - **Requirements:** R1, R2, R3
 - **Dependencies:** none (block lands after existing Ansible-ecosystem blocks)
 - **Files:** `Dockerfile`
-- **Approach:** New block after the python-ansible-requirements block: header comment describing the tool with its URL and the shared-venv rationale, `ARG ANSIBLE_LINT_VERSION=26.8.0`, then one `RUN` that runs `pipx runpip ansible install ansible-lint==${ANSIBLE_LINT_VERSION}`, follows with `pipx runpip ansible check` so any constraint drift in the shared venv fails the build, symlinks the venv binary into `/usr/local/bin`, and smoke-checks `ansible-lint --version`. Optionally grep the entry script for the argcomplete marker (informational only).
+- **Approach:** New block after the python-ansible-requirements block: header comment describing the tool with its URL and the shared-venv rationale, `ARG ANSIBLE_LINT_VERSION=26.8.0`, then one `RUN` that freezes the venv's resolved package versions to a constraints file (`pipx runpip ansible freeze`), runs `pipx runpip ansible install -c <constraints> ansible-lint==${ANSIBLE_LINT_VERSION}` so pip cannot silently upgrade any existing package (an unsatisfiable resolution fails the build), follows with `pipx runpip ansible check` as a secondary installed-metadata consistency check, symlinks the venv binary into `/usr/local/bin`, and smoke-checks `ansible-lint --version`. Optionally grep the entry script for the argcomplete marker (informational only).
 - **Patterns to follow:**
   - Azure collection requirements block in `Dockerfile` for the `pipx runpip ansible install` shape
   - gcloud completion block in `Dockerfile` for symlinking into a system-wide location
@@ -64,7 +65,7 @@ The image ships Ansible 13.5.0 with baked-in collections but no linter. Playbook
 - **Dependencies:** U1 (version finalized)
 - **Files:** `.env.example`, `README.md`, `CLAUDE.md`
 - **Approach:**
-  - `.env.example`: add `ANSIBLE_LINT_VERSION=26.8.0` in the Infrastructure as code section after `ANSIBLE_VERSION`; add an `ansible-lint` line with its PyPI URL to the version reference comment block
+  - `.env.example`: add `ANSIBLE_LINT_VERSION=26.8.0` in the Infrastructure as code section before `ANSIBLE_VERSION` (alphabetical key order per dotenv-linter); add an `ansible-lint` line with its PyPI URL to the version reference comment block
   - `README.md`: add a tool table row directly after the Ansible row, same shape as existing rows
   - `CLAUDE.md`: extend the Ansible setup paragraph — ansible-lint is injected into the Ansible venv via `pipx runpip` and exposed by a manual `/usr/local/bin` symlink; Ansible major bumps require a lockstep `ANSIBLE_LINT_VERSION` bump
 - **Patterns to follow:** Existing `.env.example` version reference entries; existing README tool table rows (`See [Dockerfile](./Dockerfile)` for version)
@@ -93,7 +94,7 @@ The image ships Ansible 13.5.0 with baked-in collections but no linter. Playbook
 
 ## Risks & Dependencies
 
-- **Shared-venv dependency resolution.** ansible-lint brings black, yamllint, ruamel-yaml, jsonschema, referencing, and friends into a venv that already carries the azure collection requirements and `python-ansible-requirements.txt` pins. pip may silently upgrade those packages to satisfy ansible-lint — warning-only, exit 0; only unsatisfiable conflicts fail the build on their own. The `pipx runpip ansible check` step in U1 closes this gap by failing the build on any resulting constraint violation.
+- **Shared-venv dependency resolution.** ansible-lint brings black, yamllint, ruamel-yaml, jsonschema, referencing, and friends into a venv that already carries the azure collection requirements and `python-ansible-requirements.txt` pins. pip may silently upgrade those packages to satisfy ansible-lint — warning-only, exit 0; only unsatisfiable conflicts fail the build on their own. The freeze-plus-`-c` install in U1 closes this gap: every existing package is held at its frozen version, so a forced upgrade becomes an unsatisfiable resolution and fails the build (`ResolutionImpossible`) instead of shipping silently. The `pipx runpip ansible check` step is retained as a secondary installed-metadata consistency check.
 - **Ansible support window.** ansible-lint tracks the last two major Ansible releases. A future Ansible major bump in this image requires a lockstep `ANSIBLE_LINT_VERSION` bump.
 - **Symlink path stability.** `/usr/local/pipx/venvs/ansible/bin` derives from `PIPX_HOME` set in the Dockerfile — stable unless `PIPX_HOME` itself changes.
 
