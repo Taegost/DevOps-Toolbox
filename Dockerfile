@@ -277,6 +277,25 @@ RUN pipx runpip ansible install \
     && rm /tmp/python-ansible-requirements.txt
 
 # -----------------------------------------------------------------------------
+# ansible-lint
+# Linter for Ansible playbooks, roles and collections. Installed into Ansible's
+# existing pipx virtualenv via runpip (not a separate venv) so it shares the
+# single ansible-core that runs playbooks — keeping lint and runtime versions
+# aligned. runpip creates no PIPX_BIN_DIR links, so the CLI is exposed by a
+# manual symlink into /usr/local/bin (available to all users); `runpip check`
+# afterwards fails the build on any constraint drift in the shared venv.
+# URL: https://github.com/ansible/ansible-lint
+# -----------------------------------------------------------------------------
+ARG ANSIBLE_LINT_VERSION=26.8.0
+
+RUN pipx runpip ansible install ansible-lint==${ANSIBLE_LINT_VERSION} \
+    && pipx runpip ansible check \
+    && ln -s /usr/local/pipx/venvs/ansible/bin/ansible-lint /usr/local/bin/ansible-lint \
+    && ansible-lint --version \
+    && (grep -q 'PYTHON_ARGCOMPLETE_OK' /usr/local/pipx/venvs/ansible/bin/ansible-lint \
+        || echo "ansible-lint: no argcomplete marker in entry script (no automatic completion)")
+
+# -----------------------------------------------------------------------------
 # Azure CLI
 # Installed via Microsoft's official apt repository rather than a raw binary.
 # Azure CLI is a Python application with many components — the apt package
