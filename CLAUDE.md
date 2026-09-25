@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 A Docker image (Dev Container) that bundles pinned versions of DevOps tooling — Terraform, Packer, kubectl, Helm, Ansible, cloud CLIs, database clients, and Python/.NET SDKs. Published to Docker Hub as `taegost/devops-toolbox`. Consumers pull the image into their projects' `.devcontainer/devcontainer.json`.
 
 `docs/solutions/` — documented solutions to past problems (bugs, best practices, tooling decisions, workflow patterns), organized by category with YAML frontmatter (`module`, `tags`, `problem_type`). Relevant when implementing or debugging in documented areas.
+`CONCEPTS.md` — shared domain vocabulary (entities, named processes, status concepts), relevant when orienting to the codebase or discussing domain concepts.
 
 ## Build Commands
 
@@ -39,6 +40,7 @@ No test suite, no linter. The CI pipeline's PR build is the validation step — 
 2. APT with version pin (Azure CLI only) — because it's a Python app with complex deps
 3. pipx (Ansible, Python dev tools) — isolated virtualenvs, no dependency conflicts
 4. Microsoft install script (.NET SDK) — needed for feature-band control beyond what APT offers
+5. Azure CLI extension index (`az extension add --system`, ssh extension) — `--system` installs under the CLI's lib path (`/opt/az/...`) so it survives the `USER vscode` switch
 
 **Ansible setup:** Ansible is installed via pipx into an isolated venv. Collections (`dependencies/ansible-requirements.yml`) are baked in at build time. Supporting Python packages (`dependencies/python-ansible-requirements.txt`) are injected into Ansible's venv via `pipx runpip ansible install`. Azure collection deps are installed from the collection's own requirements file post-install. ansible-lint (`ARG ANSIBLE_LINT_VERSION`) is injected into the same Ansible venv via `pipx runpip ansible install` and exposed by a manual `/usr/local/bin/ansible-lint` symlink — `runpip` creates no `PIPX_BIN_DIR` links. Before the install, the venv's resolved package set is frozen to a constraints file and the install runs under `-c`, so no existing package can be silently upgraded — unsatisfiable requirements fail the build. `pipx runpip ansible check` is retained afterward as a secondary installed-metadata consistency check. Ansible major version bumps require a lockstep `ANSIBLE_LINT_VERSION` bump — ansible-lint tracks the last two major Ansible releases.
 

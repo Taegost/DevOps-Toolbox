@@ -331,6 +331,34 @@ RUN curl -fsSL https://packages.microsoft.com/keys/microsoft.asc \
 ENV AZURE_CORE_COLLECT_TELEMETRY=false
 
 # -----------------------------------------------------------------------------
+# Azure CLI ssh extension
+# Adds the `ssh` command group (az ssh vm / az ssh config) out of the box (#11).
+# Installed with --system because the image ends as USER vscode: the default
+# per-user path (~/.azure/cliextensions) would land in root's home and be
+# invisible to the vscode user. --system installs under the CLI's python lib
+# path (/opt/az/...), which resolves for every user.
+#
+# Sits directly after the Azure CLI block it extends — version bumps
+# invalidate only from this layer down. An AZURE_CLI_VERSION bump outside the
+# extension's declared core range fails the build here; runtime regressions
+# within the range are not caught — validate the pair on either bump.
+# Pure-Python wheel (deps: oschmod==0.3.12, oras==0.1.30) — no TARGETARCH
+# handling needed.
+# -----------------------------------------------------------------------------
+ARG AZURE_SSH_EXTENSION_VERSION=2.0.9
+
+RUN az extension add \
+        --name ssh \
+        --version ${AZURE_SSH_EXTENSION_VERSION} \
+        --system \
+        --yes \
+    && az extension show --name ssh --query version --output tsv \
+        | grep -qx "${AZURE_SSH_EXTENSION_VERSION}" \
+    && az extension show --name ssh --query path --output tsv \
+        | grep -q '^/opt/az/' \
+    && az ssh vm --help > /dev/null
+
+# -----------------------------------------------------------------------------
 # AWS CLI v2
 # Installed via AWS's official versioned zip installer.
 # AWS CLI uses x86_64/aarch64 naming — does NOT match TARGETARCH directly.
