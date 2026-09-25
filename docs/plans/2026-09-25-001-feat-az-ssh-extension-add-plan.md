@@ -1,7 +1,7 @@
 ---
 title: feat: Add Azure CLI ssh extension
 type: feat
-status: in-progress
+status: completed
 date: 2026-09-25
 ---
 
