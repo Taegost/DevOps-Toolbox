@@ -18,11 +18,11 @@ Bake the Azure CLI `ssh` extension (2.0.9) into the image so `az ssh vm` / `az s
 **Tool installation**
 - R1. `ssh` extension 2.0.9 installed system-wide via `az extension add --system`, available to all users including the non-root `vscode` user the image ends as
 - R2. Version pinned via `ARG AZURE_SSH_EXTENSION_VERSION` declared directly above the install block (layer-cache convention)
-- R3. In-build verification: the installed extension version asserts equal to the pin, and `az ssh vm --help` proves the command group registers and loads
+- R3. In-build verification: the installed extension version asserts equal to the pin, the install path asserts under `/opt/az/` (system placement, not per-user), and `az ssh vm --help` proves the command group registers and loads
 
 **Documentation**
 - R4. `.env.example` gains `AZURE_SSH_EXTENSION_VERSION=2.0.9` in the "Cloud cli tools" group, plus a version-reference link for the extension's release history
-- R5. `.env.example` version-reference header gains the Azure CLI releases link (one of several tools currently missing a version-reference link — this plan adds only the Azure CLI and `az ssh ext` entries)
+- R5. `.env.example` version-reference header gains the Azure CLI releases link (one of several tools currently missing a version-reference link — this plan adds the Azure CLI and `az ssh ext` entries; the shipped diff also restored pre-existing drift there: the missing Argo CD release link, the missing `ARGOCD_VERSION` mirror entry, and a usage-comment `--build-arg` typo, keeping the all-ARGs mirror invariant intact)
 
 **Process**
 - R6. Smoke test (`docker build .`) passes before any PR; PR body contains `Closes #11`; PR opened only after explicit user approval per repo ABSOLUTE DIRECTIVE
@@ -32,10 +32,10 @@ Bake the Azure CLI `ssh` extension (2.0.9) into the image so `az ssh vm` / `az s
 - **`--system` install, not default per-user.** The build runs as root but the image ends as `USER vscode` (Dockerfile). The default extension path (`~/.azure/cliextensions`) would land in root's home and be invisible to the vscode user. `--system` installs under the CLI's python lib path (`/opt/az/...`), which the apt-installed CLI resolves for every user.
 - **Placement: directly after the Azure CLI block.** The extension collocates with the tool it extends. The one-time insertion rebuilds the layers below it (AWS CLI onward); future extension version bumps invalidate only from the extension layer down — the isolation property the ARG-per-block convention exists for.
 - **Pin via `--version`.** Matches the repo's pin-everything philosophy. Previously published versions stay resolvable in Microsoft's extension index, so the pin does not rot when 2.0.10 ships; upgrading is a deliberate ARG bump mirrored in `.env.example`. The pin covers the extension wheel and its direct deps only — see Risks for the unpinned transitive closure.
-- **No lockstep rule with `AZURE_CLI_VERSION`.** Unlike the ansible-lint/Ansible pairing, no coupled version window exists. Layer order guarantees the extension reinstalls against a new CLI on an `AZURE_CLI_VERSION` bump; if that new CLI is incompatible with the pinned extension, `az extension add` fails the build at this step — a broken `az ssh` cannot ship silently.
+- **Coupled compatibility with `AZURE_CLI_VERSION`.** The extension declares its supported core CLI range in Microsoft's extension index (ssh 2.0.9 requires CLI ≥ 2.45.0), so a bump to either version puts the other in scope — validate the selected pair whenever either changes. Layer order guarantees the extension reinstalls against a new CLI on an `AZURE_CLI_VERSION` bump, and a pair outside the index's declared range fails `az extension add` at this step. The install and the `az ssh vm --help` check confirm installation and command registration only — not runtime compatibility of every `az ssh vm` execution path.
 - **`--yes` on the install.** `docker build` has no TTY; the flag guarantees non-interactive completion.
 - **No TARGETARCH handling.** The extension itself is a pure-Python wheel (deps: `oschmod==0.3.12`, `oras==0.1.30`) — one install covers amd64 and arm64. (Transitive closure resolves per-arch from PyPI — see Risks; arch-independence conclusion unchanged.)
-- **No README or docs/solutions change.** The extension is a facet of Azure CLI, not a new tool; the README table row already defers to the Dockerfile. The one non-obvious bit (`--system` for the vscode switch) is a single documented flag — the Dockerfile block comment captures the rationale in place.
+- **No README change; docs/solutions deferred then superseded in-PR.** The extension is a facet of Azure CLI, not a new tool; the README table row already defers to the Dockerfile. A docs/solutions entry was deferred at planning time (single-flag rationale) but shipped in-PR once the learning proved non-trivial — see Scope Boundaries.
 
 ## Implementation Units
 
@@ -57,12 +57,16 @@ Bake the Azure CLI `ssh` extension (2.0.9) into the image so `az ssh vm` / `az s
           --yes \
       && az extension show --name ssh --query version --output tsv \
           | grep -qx "${AZURE_SSH_EXTENSION_VERSION}" \
+      && az extension show --name ssh --query path --output tsv \
+          | grep -q '^/opt/az/' \
       && az ssh vm --help > /dev/null
   ```
 
+  (The path assertion was added in the PR's review-fix round, covering test scenario 4's check at build time; scenario 4 below remains as the container-level confirmation.)
+
 - **Patterns to follow:** Azure CLI block (`Dockerfile:307-331`) for banner style and version-check-in-RUN; every block's ARG-directly-above-RUN layout
 - **Test scenarios:**
-  - Build succeeds; the extension RUN's embedded assertions pass (version equals pin, command group loads)
+  - Build succeeds; the extension RUN's embedded assertions pass (version equals pin, path under /opt/az, command group loads)
   - `az extension list --output table` in the built container reports `ssh  2.0.9`
   - `az ssh vm --help` exits zero as the non-root `vscode` user — verifies the `--system` placement survives `USER vscode`
   - `az extension list --query "[?name=='ssh'].path" --output tsv` shows a path under `/opt/az/...` — proves system-dir placement, not a per-user install
@@ -99,14 +103,15 @@ Bake the Azure CLI `ssh` extension (2.0.9) into the image so `az ssh vm` / `az s
 - README mention of the bundled extension (discoverability nice-to-have; table row already defers to Dockerfile)
 - Other Azure CLI extensions (e.g. `connectedmachine`, `azure-devops`) — not requested
 - Any `AZURE_CLI_VERSION` bump — independent change
-- docs/solutions entry — fails the non-trivial-learning bar (single documented flag; rationale lives in the Dockerfile comment)
+- docs/solutions entry — deferred at planning time as failing the non-trivial-learning bar; **superseded in-PR**: the learning proved non-trivial (root-vs-vscode silent install failure, supply-chain disclosure, coupled version range), so `docs/solutions/tooling-decisions/az-cli-extensions-system-install.md` shipped with this PR
+- CONCEPTS.md and CLAUDE.md additions — not planned units, recorded here for scope coherence: `CONCEPTS.md` (new file) seeds the repo's shared vocabulary (ARG-per-block convention, version mirror, smoke test) per the ts-compound workflow, and `CLAUDE.md` gained the pointer to it plus the extension-install method as install-method priority item 5
 
 ## Risks & Dependencies
 
 - **Extension index availability.** `az extension add --version` fetches the index and wheel from Microsoft's hosted index, and pip resolves the extension's dependencies from PyPI — both hosts must be reachable. Same network-dependency class as every curl download already in the Dockerfile; an outage fails loudly at this RUN step.
 - **Unpinned transitive dependencies.** `az extension add` pip-installs the extension with no `--no-deps` and no constraints hook, and `oras==0.1.30` requires bare `jsonschema` and `requests` — so every cold build (including the weekly cron) resolves whatever PyPI serves that day and root-installs it under `/opt/az`. The ARG pin governs the extension wheel and direct deps only; the transitive closure is unpinned, and `az extension add` exposes no digest/signature verification. This is the same defect class the Ansible venv constraints freeze guards against; `az extension add` offers no constraints passthrough, so disclosure is the available mitigation.
 - **One-time layer-cache rebuild.** Inserting the block above ~20 later tool layers invalidates them once on the introducing commit; every subsequent build caches normally.
-- **Future incompatibility is loud, not silent.** An `AZURE_CLI_VERSION` bump that the pinned extension does not support fails the build at the extension step (extension declares its supported core range in the index).
+- **Future incompatibility: index-range violations are loud; runtime regressions are not.** An `AZURE_CLI_VERSION` bump outside the extension's declared supported core range fails the build at the extension step. An incompatibility *within* the declared range (e.g. Azure/azure-cli#33708 — CLI 2.88.0 broke `az ssh vm` at runtime while install and `--help` passed) ships silently; that residual is why pair validation is required on either bump rather than relying on the build gate alone.
 
 ## Sources & Research
 

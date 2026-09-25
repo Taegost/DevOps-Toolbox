@@ -51,6 +51,7 @@ Beyond the path question, four more decisions had to be made before the block wa
 
 3. **Pin explicitly and assert inside the same `RUN`.** Pass `--version ${AZURE_SSH_EXTENSION_VERSION}` and verify in the same layer:
    - *version drift check*: `az extension show --name ssh --query version --output tsv | grep -qx "${AZURE_SSH_EXTENSION_VERSION}"` — if the index ever serves a different version than the ARG (or a future CLI change breaks the pin), the build fails instead of silently shipping different contents;
+   - *system-path check*: `az extension show --name ssh --query path --output tsv | grep -q '^/opt/az/'` — catches a regression to the default per-user install inside the root build context, where a `/root/.azure/cliextensions` install would otherwise pass every other assertion;
    - *command-group load check*: `az ssh vm --help > /dev/null` — the extension must not just install but actually load.
    
    Pass `--yes`: docker build has no TTY, and the extension add's interactive confirmation prompt would hang or fail the build.
@@ -61,27 +62,27 @@ Beyond the path question, four more decisions had to be made before the block wa
 
 6. **Know the supply-chain limits — and disclose them.** `az extension add` pip-installs the extension with no `--no-deps` option, no constraints passthrough, and no digest or signature verification. Direct dependencies are pinned by the extension's own setup.py (`oschmod==0.3.12`, `oras==0.1.30`), but the transitive closure (bare `jsonschema`, and `requests` via oras) resolves from PyPI at every cold build — unpinned. The repo's Ansible venv install freezes its resolved set to a constraints file and installs under `-c` so nothing can silently upgrade; `az extension add` offers no equivalent hook. The mitigation available today is disclosure: state the unpinned-transitive-deps exposure in the plan's risk section when implementing, so the tradeoff is made consciously rather than assumed away.
 
-7. **Treat the extension version and `AZURE_CLI_VERSION` as coupled.** The extension declares its supported core CLI range in Microsoft's extension index. An `AZURE_CLI_VERSION` bump that is incompatible with the pinned extension fails `az extension add` at build time — a broken `az ssh` cannot ship silently. Expect a bump of either ARG to put the other in scope.
+7. **Treat the extension version and `AZURE_CLI_VERSION` as coupled.** The extension declares its supported core CLI range in Microsoft's extension index. An `AZURE_CLI_VERSION` bump outside that declared range fails `az extension add` at build time; a runtime regression *within* the range (e.g. Azure/azure-cli#33708 — CLI 2.88.0 broke `az ssh vm` while install and `--help` passed) is not caught by the build. Expect a bump of either ARG to put the other in scope, and validate the selected pair.
 
 ## Why This Matters
 
-The per-user-default failure mode is the worst kind: **silent at build time, broken at run time**. `az extension add` without `--system` exits 0 during the build, so CI passes and the image publishes; the first user to run `az ssh vm` gets a command-group-not-found error — in a container where the extension exists on disk but under `/root`, where they cannot reach it. Because every consumer project inherits the image, one wrong flag ships a broken tool to everyone, and the symptom surfaces far from its cause.
+The per-user-default failure mode is the worst kind: **silent at build time, broken at run time** — for an unguarded install. `az extension add` without `--system` exits 0 during the build, so a block lacking the system-path assertion above passes CI and publishes; the first user to run `az ssh vm` gets a command-group-not-found error — in a container where the extension exists on disk but under `/root`, where they cannot reach it. Because every consumer project inherits the image, one wrong flag ships a broken tool to everyone, and the symptom surfaces far from its cause.
 
-The in-RUN assertions convert three quiet failure modes into loud build failures: version drift, a broken command group, and CLI/extension incompatibility. Given this repo has no test suite and the CI build is the validation step, assertions inside the `RUN` are the only executable checks that will ever run for this tool.
+The in-RUN assertions convert four quiet failure modes into loud build failures: version drift, an install that landed outside the system path (the per-user regression), a broken command group, and an out-of-range CLI/extension pairing. What they cannot catch is a runtime regression inside the declared range — that residual is why the coupled-pair validation in guidance #7 exists. Given this repo has no test suite and the CI build is the validation step, assertions inside the `RUN` are the only executable checks that will ever run for this tool.
 
 On the supply-chain side, the unpinned transitive closure means two cold builds of an identical Dockerfile can produce images with different dependency contents if an upstream package releases in between. That is a reproducibility hole and a small tampering surface the Dockerfile cannot close itself. Documenting it means reviewers weigh the exposure when deciding whether to add an extension at all, and users know the guarantee level they are getting. The repo's own Ansible install (frozen constraints under `-c`) sets the local standard — the gap is worth naming wherever a tool cannot meet it.
 
 ## When to Apply
 
 - Baking **any** Azure CLI extension into an image that installs as root and runs as another user — always with `--system`, never the default per-user path.
-- Writing a new `az extension add` block in this Dockerfile — apply the ARG-above-RUN placement, `--version` pin, `--yes`, and both in-RUN assertions.
+- Writing a new `az extension add` block in this Dockerfile — apply the ARG-above-RUN placement, `--version` pin, `--yes`, and all three in-RUN assertions (version, system path, command-group load).
 - Deciding whether a tool needs `TARGETARCH` remapping — check whether it ships as a pure-Python wheel (no) or a native binary (yes, remap inline like AWS CLI/gcloud).
 - Assessing supply-chain exposure for CLI-managed pip installs — when the install command offers no constraints hook, disclose the unpinned transitive deps in the plan rather than assuming everything is pinned.
-- Bumping `AZURE_CLI_VERSION` or an extension version — treat them as coupled; the extension's supported core range in Microsoft's index is the compatibility boundary, and the build will enforce it.
+- Bumping `AZURE_CLI_VERSION` or an extension version — treat them as coupled; the extension's supported core range in Microsoft's index is the compatibility boundary, and the build enforces that boundary. Runtime regressions within the range are not build-caught — validate the pair.
 
 ## Examples
 
-**The install block as implemented (`Dockerfile:333-357`):**
+**The install block as implemented (`Dockerfile:333-359`):**
 
 ```dockerfile
 # -----------------------------------------------------------------------------
@@ -93,9 +94,9 @@ On the supply-chain side, the unpinned transitive closure means two cold builds 
 # path (/opt/az/...), which resolves for every user.
 #
 # Sits directly after the Azure CLI block it extends — version bumps
-# invalidate only from this layer down. An AZURE_CLI_VERSION bump incompatible
-# with the pinned extension fails the build here — a broken az ssh cannot
-# ship silently.
+# invalidate only from this layer down. An AZURE_CLI_VERSION bump outside the
+# extension's declared core range fails the build here; runtime regressions
+# within the range are not caught — validate the pair on either bump.
 # Pure-Python wheel (deps: oschmod==0.3.12, oras==0.1.30) — no TARGETARCH
 # handling needed.
 # -----------------------------------------------------------------------------
@@ -108,6 +109,8 @@ RUN az extension add \
         --yes \
     && az extension show --name ssh --query version --output tsv \
         | grep -qx "${AZURE_SSH_EXTENSION_VERSION}" \
+    && az extension show --name ssh --query path --output tsv \
+        | grep -q '^/opt/az/' \
     && az ssh vm --help > /dev/null
 ```
 
@@ -123,6 +126,8 @@ RUN az extension add \
         --system --yes \
     && az extension show --name ssh --query version --output tsv \
         | grep -qx "${AZURE_SSH_EXTENSION_VERSION}" \
+    && az extension show --name ssh --query path --output tsv \
+        | grep -q '^/opt/az/' \
     && az ssh vm --help > /dev/null
 ```
 
