@@ -339,9 +339,9 @@ ENV AZURE_CORE_COLLECT_TELEMETRY=false
 # path (/opt/az/...), which resolves for every user.
 #
 # Sits directly after the Azure CLI block it extends — version bumps
-# invalidate only from this layer down. An AZURE_CLI_VERSION bump incompatible
-# with the pinned extension fails the build here — a broken az ssh cannot
-# ship silently.
+# invalidate only from this layer down. An AZURE_CLI_VERSION bump outside the
+# extension's declared core range fails the build here; runtime regressions
+# within the range are not caught — validate the pair on either bump.
 # Pure-Python wheel (deps: oschmod==0.3.12, oras==0.1.30) — no TARGETARCH
 # handling needed.
 # -----------------------------------------------------------------------------
@@ -354,6 +354,8 @@ RUN az extension add \
         --yes \
     && az extension show --name ssh --query version --output tsv \
         | grep -qx "${AZURE_SSH_EXTENSION_VERSION}" \
+    && az extension show --name ssh --query path --output tsv \
+        | grep -q '^/opt/az/' \
     && az ssh vm --help > /dev/null
 
 # -----------------------------------------------------------------------------
