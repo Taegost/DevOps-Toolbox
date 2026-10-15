@@ -1,6 +1,7 @@
 ---
 title: "feat: Add PostgreSQL 18 client (psql)"
 type: feat
+status: completed
 date: 2026-10-15
 ---
 
