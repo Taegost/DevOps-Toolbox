@@ -9,7 +9,10 @@ Each tool's version `ARG` is declared directly above its own install block in th
 *Avoid:* version pin grouping
 
 ### Version mirror
-The committed env-file template that mirrors every version `ARG`'s default value, so a local build can pass all pins as build args and a reader can see current tool versions at a glance. A Dockerfile `ARG` without a mirror entry (or vice versa) is drift; values must match exactly.
+The committed env-file template that mirrors every Dockerfile `ARG`'s default value — version pins and SHA256 pins alike — so a local build can pass all pins as build args and a reader can see current tool versions at a glance. A Dockerfile `ARG` without a mirror entry (or vice versa) is drift; values must match exactly. Non-version pins live in their own group, never in a version group.
+
+### Drift tripwire
+The scheduled cacheless build whose forced layer rebuild re-executes pinned-download checksum gates — the only build on the schedule that re-downloads vendor artifacts, so the sole detector of vendor-side byte drift that warm-cache builds silently skip. A red tripwire at the checksum step means the vendor's bytes changed; at the download step, a moved URL.
 
 ### Smoke test
 The full local Docker build of the image, run before any Dockerfile change may be opened as a PR. It is the repo's only build validation step, so an in-build assertion failing is the same as a test failing. PRs are additionally gated on explicit maintainer approval after the smoke test passes — the build alone never authorizes opening a PR.

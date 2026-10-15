@@ -600,6 +600,57 @@ RUN kustomize completion bash > /etc/bash_completion.d/kustomize
 RUN stern --completion bash > /etc/bash_completion.d/stern
 
 # -----------------------------------------------------------------------------
+# Azure Database for PostgreSQL TLS root CAs (#15)
+# Bakes the two root CAs Azure Database for PostgreSQL Flexible Server chains
+# to into the system trust store at build time. Go clients (e.g. the
+# cyrilgdn/postgresql Terraform provider) verify server certificates only
+# against the system trust store and never download missing CAs, so
+# sslmode = "verify-full" fails with "x509: certificate signed by unknown
+# authority" unless these roots are present.
+#
+# Root CAs only, no intermediates or server certificates: Microsoft rotates
+# intermediates and server certs without notice — pinning them breaks on
+# rotation. Roots are the stable anchors.
+#
+# The distro CA package also ships both roots, so update-ca-certificates
+# emits "skipping duplicate certificate" warnings during rehash. Those
+# warnings are expected — do not "fix" them. The explicit copies guarantee
+# both roots stay present regardless of what the base image's CA package
+# carries.
+#
+# Arch-independent: the certs are converted to PEM, so no TARGETARCH
+# handling is needed.
+#
+# The sha256 gates re-execute only when this layer rebuilds — a cached RUN
+# does not re-download. The weekly Monday cron build (no cache-from) is the
+# vendor-drift tripwire.
+#
+# Rotation rule: URL + sha256 ARG + the .env.example mirror are edited as
+# one unit. Azure rotates roots with dual-signed chains — add the new root
+# first, remove the old one only after Azure's retirement date passes.
+# The pins are the CCADB-published SHA256 fingerprints (equal to the file
+# hash), so the checksum also pins the certificate's identity.
+# -----------------------------------------------------------------------------
+ARG DIGICERT_GLOBAL_ROOT_G2_SHA256=cb3ccbb76031e5e0138f8dd39a23f9de47ffc35e43c1144cea27d46a5ab1cb5f
+ARG MICROSOFT_RSA_ROOT_CA_2017_SHA256=c741f70f4b2a8d88bf2e71c14122ef53ef10eba0cfa5e64cfa20f418853073e0
+
+RUN curl -fsSL https://cacerts.digicert.com/DigiCertGlobalRootG2.crt \
+        -o /tmp/az-postgresql-digicert-global-root-g2.der \
+    && curl -fsSL \
+        "https://www.microsoft.com/pkiops/certs/Microsoft%20RSA%20Root%20Certificate%20Authority%202017.crt" \
+        -o /tmp/az-postgresql-microsoft-rsa-root-ca-2017.der \
+    && echo "${DIGICERT_GLOBAL_ROOT_G2_SHA256}  /tmp/az-postgresql-digicert-global-root-g2.der" | sha256sum -c \
+    && echo "${MICROSOFT_RSA_ROOT_CA_2017_SHA256}  /tmp/az-postgresql-microsoft-rsa-root-ca-2017.der" | sha256sum -c \
+    && openssl x509 -inform DER -in /tmp/az-postgresql-digicert-global-root-g2.der \
+        -out /usr/local/share/ca-certificates/az-postgresql-digicert-global-root-g2.crt \
+    && openssl x509 -inform DER -in /tmp/az-postgresql-microsoft-rsa-root-ca-2017.der \
+        -out /usr/local/share/ca-certificates/az-postgresql-microsoft-rsa-root-ca-2017.crt \
+    && update-ca-certificates \
+    && openssl verify /usr/local/share/ca-certificates/az-postgresql-digicert-global-root-g2.crt \
+    && openssl verify /usr/local/share/ca-certificates/az-postgresql-microsoft-rsa-root-ca-2017.crt \
+    && rm /tmp/az-postgresql-digicert-global-root-g2.der /tmp/az-postgresql-microsoft-rsa-root-ca-2017.der
+
+# -----------------------------------------------------------------------------
 # Final ownership and user setup
 # The base image creates a non-root 'vscode' user. We ensure the pipx bin
 # directory (set to /usr/local/bin) and completion files are accessible.
