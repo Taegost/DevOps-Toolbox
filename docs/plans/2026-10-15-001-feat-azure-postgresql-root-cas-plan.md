@@ -1,6 +1,7 @@
 ---
 title: feat: Bake Azure PostgreSQL root CAs into the image trust store
 type: feat
+status: completed
 date: 2026-10-15
 ---
 
