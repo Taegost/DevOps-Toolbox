@@ -37,7 +37,7 @@ No test suite, no linter. The CI pipeline's PR build is the validation step — 
 
 **Install method priority:**
 1. Direct binary download (most tools) — for exact version pinning
-2. APT with version pin (Azure CLI only) — because it's a Python app with complex deps
+2. APT from a third-party repo (Azure CLI: version pin — Python app with complex deps; PostgreSQL client: major-float from PGDG — package name carries the major, point releases float per build)
 3. pipx (Ansible, Python dev tools) — isolated virtualenvs, no dependency conflicts
 4. Microsoft install script (.NET SDK) — needed for feature-band control beyond what APT offers
 5. Azure CLI extension index (`az extension add --system`, ssh extension) — `--system` installs under the CLI's lib path (`/opt/az/...`) so it survives the `USER vscode` switch
@@ -100,5 +100,6 @@ Two-stage guard against bad semver tags:
 - No `weekly` tag — semantically identical to `latest`, would add noise
 - `kubeseal` and `stern` version ARGs omit the `v` prefix (unlike other tools) because their GitHub release URLs use bare numbers
 - `mariadb-client` comes from Ubuntu APT, not MariaDB Foundation repo — MariaDB 12.x lacks a stable version-addressable APT URL
+- `postgresql-client-18` comes from the PGDG repo, not Ubuntu APT — noble ships only the PG16 client; the pin floats on the major (the ARG feeds the package name, point releases resolve fresh per build) because PGDG keeps only ~3 package versions in its index — exact point pins break the weekly cacheless rebuild
 - Azure Ansible collection Python deps are installed from the collection's own `requirements.txt` (only exists post-install), not pre-listed in `python-ansible-requirements.txt`
 - `.dockerignore` excludes `.github`, `.devcontainer`, and README.md — the image doesn't need them

@@ -651,6 +651,70 @@ RUN curl -fsSL https://cacerts.digicert.com/DigiCertGlobalRootG2.crt \
     && rm /tmp/az-postgresql-digicert-global-root-g2.der /tmp/az-postgresql-microsoft-rsa-root-ca-2017.der
 
 # -----------------------------------------------------------------------------
+# PostgreSQL 18 client (psql, pg_dump, pg_restore, pg_dumpall, pg_basebackup)
+# Installed from the official PGDG apt repository. Ubuntu noble ships only the
+# PG16 client, so PG18 requires PGDG — the mariadb-client "no stable
+# version-addressable repo" exception does not apply here.
+#
+# Major-float pin: POSTGRESQL_CLIENT_VERSION carries only the major (18) and
+# feeds the package name postgresql-client-${POSTGRESQL_CLIENT_VERSION}. PGDG
+# prunes old point releases from its index (3-version retention), so an exact
+# point pin breaks the weekly cacheless build within ~two point releases.
+# Floating lets the weekly rebuild deliver point/security releases
+# automatically; a major bump (18 -> 19) is a deliberate ARG edit.
+#
+# postgresql-client-common is named explicitly in the install list: Ubuntu's
+# installed 257build1 build already satisfies the client-18 dependency floor,
+# so an implicit install would silently keep the Ubuntu wrapper. Naming it
+# upgrades the wrapper to the PGDG build, keeping the whole PG stack on one
+# source. The package also stays in the system-packages layer above —
+# removing it there would invalidate every layer below for zero gain.
+#
+# Readline: psql tab completion is a libreadline built-in — no bash-completion
+# step exists or is needed for it.
+#
+# No GPG fingerprint pin: the key arrives over TLS from postgresql.org — the
+# same trust class as the unpinned Microsoft key in the Azure CLI block.
+#
+# Placed at the tail, after the Azure PostgreSQL TLS CAs block: zero layers
+# below to invalidate on introduction, and an ARG bump rebuilds only this
+# block.
+#
+# Weekly-red triage (the weekly cron build is cacheless, so vendor drift lands
+# here first):
+#   - signature/NO_PUBKEY error at apt-get update -> PGDG key rotation OR a
+#     truncated key fetch (the curl | gpg --dearmor | tee pipeline fails one
+#     step later than the fetch itself). Retry once, then rotate the key
+#     (precedent: PGDG key handling change, 2022-11-11).
+#   - "Unable to locate package postgresql-client-18" -> the suite was
+#     decommissioned or the major dropped from noble-pgdg.
+#   - any OTHER repo's fetch error -> co-hosted azure-cli.list / Ubuntu mirror
+#     outage refreshed by this block's full apt-get update — not a PGDG
+#     problem.
+#
+# Removal history as recurrence defense: PR #7 (commit 17bf1ec) added this
+# block CI-green; commit 98758e0 removed it in error the same day
+# (2026-04-27). This block restores it.
+# -----------------------------------------------------------------------------
+ARG POSTGRESQL_CLIENT_VERSION=18
+
+RUN mkdir -p /etc/apt/keyrings \
+    && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+    | gpg --dearmor \
+    | tee /etc/apt/keyrings/postgresql.gpg > /dev/null \
+    && printf 'Types: deb\nURIs: https://apt.postgresql.org/pub/repos/apt\nSuites: noble-pgdg\nComponents: main\nArchitectures: %s\nSigned-By: /etc/apt/keyrings/postgresql.gpg\n' "${TARGETARCH}" \
+    | tee /etc/apt/sources.list.d/pgdg.sources \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+    postgresql-client-${POSTGRESQL_CLIENT_VERSION} \
+    postgresql-client-common \
+    && psql --version | grep "psql (PostgreSQL) ${POSTGRESQL_CLIENT_VERSION}\." \
+    && pg_dump --version \
+    && pg_restore --version \
+    && rm -f /etc/apt/sources.list.d/pgdg.sources /etc/apt/keyrings/postgresql.gpg \
+    && rm -rf /var/lib/apt/lists/*
+
+# -----------------------------------------------------------------------------
 # Final ownership and user setup
 # The base image creates a non-root 'vscode' user. We ensure the pipx bin
 # directory (set to /usr/local/bin) and completion files are accessible.
