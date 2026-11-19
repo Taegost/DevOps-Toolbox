@@ -726,7 +726,8 @@ RUN mkdir -p /etc/apt/keyrings \
 # just existence, is the point, so an in-RUN assertion fails the build if the
 # directory is not owned by vscode.
 # The residual case (root-owned .local appearing post-build) is covered by the
-# script-level history fallback baked in the next block (Issue #18).
+# script-level history fallback baked in the next block - but only in sessions
+# that dot-source that script; non-opt-in containers keep the error (Issue #18).
 # -----------------------------------------------------------------------------
 RUN mkdir -p /home/vscode/.local/share/powershell/PSReadLine \
     && chown -R vscode:vscode /home/vscode/.local \
@@ -745,7 +746,7 @@ RUN mkdir -p /home/vscode/.local/share/powershell/PSReadLine \
 # -----------------------------------------------------------------------------
 COPY dependencies/ps_git_prompt.ps1 /usr/local/share/powershell/
 RUN chmod 0644 /usr/local/share/powershell/ps_git_prompt.ps1 \
-    && test -r /usr/local/share/powershell/ps_git_prompt.ps1 \
+    && [ "$(stat -c '%a' /usr/local/share/powershell/ps_git_prompt.ps1)" = "644" ] \
     && grep -q '^function prompt' /usr/local/share/powershell/ps_git_prompt.ps1
 
 # -----------------------------------------------------------------------------

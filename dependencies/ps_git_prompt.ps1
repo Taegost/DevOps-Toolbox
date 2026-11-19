@@ -23,15 +23,19 @@
 #   by creating and removing a temp file - never by checking the history file
 #   itself, which is absent in the normal first-launch state. If the probe
 #   fails, history is silently redirected to a direct child of $HOME. The
-#   guard emits nothing on either branch, and is skipped entirely when
-#   PSReadLine is not loaded (non-interactive sessions).
+#   guard emits nothing on either branch and never touches PSReadLine
+#   options unless the default history path is unwritable.
 # =============================================================================
 
 function prompt {
     $e = [char]27
-    $branch = git branch --show-current 2>$null
-    if (-not $branch -and (git rev-parse --is-inside-work-tree 2>$null)) {
-        $branch = git rev-parse --short HEAD 2>$null   # detached HEAD
+    # Gate all git detection on real work-tree membership: bare repos report
+    # a current branch too (HEAD points at one), but have no work tree, so
+    # they must render no branch segment.
+    $branch = $null
+    if ((git rev-parse --is-inside-work-tree 2>$null) -eq 'true') {
+        $branch = git branch --show-current 2>$null
+        if (-not $branch) { $branch = git rev-parse --short HEAD 2>$null }   # detached HEAD
     }
     $out = "PS $e[34m$($PWD.Path)$e[0m"
     if ($branch) { $out += " $e[1;31m($branch)$e[0m" }
@@ -41,35 +45,43 @@ function prompt {
 # --- PSReadLine history-path fallback ----------------------------------------
 # Silent on both branches: default path writable -> no change, no output;
 # default path unwritable -> redirect to $HOME/.ps_readline_history.txt.
-# Anything that throws inside either branch is swallowed below - nothing
-# reaches the console.
+# Anything that throws inside the scriptblock below is swallowed - nothing
+# reaches the console. The scriptblock scope keeps every guard variable out
+# of the caller's session (dot-sourcing otherwise runs in caller scope).
 # NOTE: $PROFILE runs BEFORE the console host imports PSReadLine, so a bare
 # Get-Module check here sees nothing in interactive sessions and the guard
-# would silently never run. Force-import in interactive ConsoleHost sessions
-# (idempotent - the host reuses the loaded module); non-interactive sessions
-# stay untouched.
-$psGitPromptReadLine = Get-Module -Name PSReadLine
-if (-not $psGitPromptReadLine -and [Environment]::UserInteractive -and $Host.Name -eq 'ConsoleHost') {
-    Import-Module PSReadLine -ErrorAction SilentlyContinue
-    $psGitPromptReadLine = Get-Module -Name PSReadLine
-}
-if ($psGitPromptReadLine) {
-    $psGitPromptPreviousEap = $ErrorActionPreference
-    try {
-        $ErrorActionPreference = 'Stop'
-        $psGitPromptHistoryDir = Split-Path -Parent (Get-PSReadLineOption).HistorySavePath
-        $psGitPromptProbe = Join-Path $psGitPromptHistoryDir ([System.IO.Path]::GetRandomFileName())
-        $null = New-Item -Path $psGitPromptProbe -ItemType File -Force
-        Remove-Item -Path $psGitPromptProbe -Force -ErrorAction SilentlyContinue
-    } catch {
-        # Default path unwritable: fall back to a direct child of $HOME.
-        try {
-            Set-PSReadLineOption -HistorySavePath (Join-Path $HOME '.ps_readline_history.txt')
-        } catch {
-            # $HOME unwritable too (uid-mismatch session): nothing left to
-            # redirect to. PSReadLine self-suppresses its error after the
-            # first report, so staying silent here is safe.
-        }
+# would silently never run. Force-import when running in a console host
+# (idempotent - the host reuses the loaded module). On Linux every pwsh
+# session reports UserInteractive+ConsoleHost, so a non-interactive
+# dot-source also runs the guard - harmless: it only probes the history
+# dir and leaves options alone unless the probe fails.
+& {
+    $psReadLineModule = Get-Module -Name PSReadLine
+    if (-not $psReadLineModule -and [Environment]::UserInteractive -and $Host.Name -eq 'ConsoleHost') {
+        Import-Module PSReadLine -ErrorAction SilentlyContinue
+        $psReadLineModule = Get-Module -Name PSReadLine
     }
-    $ErrorActionPreference = $psGitPromptPreviousEap
+    if ($psReadLineModule) {
+        $previousEap = $ErrorActionPreference
+        try {
+            $ErrorActionPreference = 'Stop'
+            $historyDir = Split-Path -Parent (Get-PSReadLineOption).HistorySavePath
+            $probe = Join-Path $historyDir ([System.IO.Path]::GetRandomFileName())
+            $null = New-Item -Path $probe -ItemType File -Force
+            # Rare accepted leak: if this Remove-Item fails (concurrent lock),
+            # one empty probe file stays in the history dir - PSReadLine
+            # ignores stray files, so we swallow rather than surface noise.
+            Remove-Item -Path $probe -Force -ErrorAction SilentlyContinue
+        } catch {
+            # Default path unwritable: fall back to a direct child of $HOME.
+            try {
+                Set-PSReadLineOption -HistorySavePath (Join-Path $HOME '.ps_readline_history.txt')
+            } catch {
+                # $HOME unwritable too (uid-mismatch session): nothing left to
+                # redirect to. PSReadLine self-suppresses its error after the
+                # first report, so staying silent here is safe.
+            }
+        }
+        $ErrorActionPreference = $previousEap
+    }
 }
