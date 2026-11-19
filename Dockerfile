@@ -715,6 +715,41 @@ RUN mkdir -p /etc/apt/keyrings \
     && rm -rf /var/lib/apt/lists/*
 
 # -----------------------------------------------------------------------------
+# PowerShell PSReadLine history directory
+# Pre-creates the PSReadLine history directory so the first `pwsh` launch never
+# mkdirs it at runtime. Root cause (Issue #18): /home/vscode is mode 750 owned
+# vscode:vscode and .local does not exist at build time, so PSReadLine must
+# create the entire ~/.local/share/powershell/PSReadLine chain on first launch.
+# Runtime failure mode: a root-owned .local appearing after the build
+# (devcontainer host integration) makes the default history path unwritable —
+# "Access to the path '/home/vscode/.local/share' is denied". Ownership, not
+# just existence, is the point, so an in-RUN assertion fails the build if the
+# directory is not owned by vscode.
+# The residual case (root-owned .local appearing post-build) is covered by the
+# script-level history fallback baked in the next block - but only in sessions
+# that dot-source that script; non-opt-in containers keep the error (Issue #18).
+# -----------------------------------------------------------------------------
+RUN mkdir -p /home/vscode/.local/share/powershell/PSReadLine \
+    && chown -R vscode:vscode /home/vscode/.local \
+    && [ "$(stat -c '%U' /home/vscode/.local/share/powershell/PSReadLine)" = "vscode" ]
+
+# -----------------------------------------------------------------------------
+# PowerShell git prompt script (Issue #18)
+# First-party, dependency-free prompt function: `PS <path>` with a blue path,
+# bold-red (branch) on a branch, (short-SHA) on detached HEAD, nothing outside
+# a work tree. Baked to a stable system path and NOT put on PATH — consumers
+# dot-source it from $PROFILE via postCreateCommand (see README), it is never
+# executed. Also carries the silent PSReadLine history fallback for the
+# residual root-owned-.local case left open by the block above. chmod keeps
+# the file world-readable regardless of build-context file modes; the grep
+# asserts the baked file is the prompt script, not an empty/failed COPY.
+# -----------------------------------------------------------------------------
+COPY dependencies/ps_git_prompt.ps1 /usr/local/share/powershell/
+RUN chmod 0644 /usr/local/share/powershell/ps_git_prompt.ps1 \
+    && [ "$(stat -c '%a' /usr/local/share/powershell/ps_git_prompt.ps1)" = "644" ] \
+    && grep -q '^function prompt' /usr/local/share/powershell/ps_git_prompt.ps1
+
+# -----------------------------------------------------------------------------
 # Final ownership and user setup
 # The base image creates a non-root 'vscode' user. We ensure the pipx bin
 # directory (set to /usr/local/bin) and completion files are accessible.

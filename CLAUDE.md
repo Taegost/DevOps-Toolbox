@@ -102,4 +102,5 @@ Two-stage guard against bad semver tags:
 - `mariadb-client` comes from Ubuntu APT, not MariaDB Foundation repo — MariaDB 12.x lacks a stable version-addressable APT URL
 - `postgresql-client-18` comes from the PGDG repo, not Ubuntu APT — noble ships only the PG16 client; the pin floats on the major (the ARG feeds the package name, point releases resolve fresh per build) because PGDG keeps only ~3 package versions in its index — exact point pins break the weekly cacheless rebuild
 - Azure Ansible collection Python deps are installed from the collection's own `requirements.txt` (only exists post-install), not pre-listed in `python-ansible-requirements.txt`
+- `ps_git_prompt.ps1` is a first-party script (no ARG, no version): source in `dependencies/`, baked to `/usr/local/share/powershell/ps_git_prompt.ps1` via COPY — dot-sourced from the consumer's `$PROFILE` via opt-in `postCreateCommand`, never auto-loaded and not on PATH
 - `.dockerignore` excludes `.github`, `.devcontainer`, and README.md — the image doesn't need them
