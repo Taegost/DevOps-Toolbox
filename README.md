@@ -152,6 +152,13 @@ installed after the container starts using `postCreateCommand`:
 "postCreateCommand": "ansible-galaxy collection install -r requirements.yml"
 ```
 
+**PowerShell project (git-aware prompt):**
+Dot-sources the image's git-aware PowerShell prompt into your `$PROFILE`
+(idempotent — safe on every rebuild):
+```json
+"postCreateCommand": "pwsh -NoProfile -Command 'if (!(Test-Path $PROFILE)) { New-Item -ItemType File -Path $PROFILE -Force }; if (!(Select-String -Path $PROFILE -SimpleMatch \"/usr/local/share/powershell/ps_git_prompt.ps1\" -Quiet)) { Add-Content -Path $PROFILE -Value \". /usr/local/share/powershell/ps_git_prompt.ps1\" }'"
+```
+
 Both can be combined:
 ```json
 "postCreateCommand": "pip install -r requirements.txt && ansible-galaxy collection install -r requirements.yml"
@@ -238,7 +245,8 @@ devops-toolbox/
 ├── dependencies/
 │   ├── ansible-requirements.yml  # Toolbox-level Ansible collections
 │   ├── python-ansible-requirements.txt  # Packages injected into Ansible venv
-│   └── python-dev-requirements.txt      # Python development tooling
+│   ├── python-dev-requirements.txt      # Python development tooling
+│   └── ps_git_prompt.ps1        # PowerShell git-aware prompt (opt-in via $PROFILE)
 ├── Dockerfile                    # Image definition
 ├── .dockerignore                 # Build context exclusions
 ├── .env.example                  # Local build variable reference
