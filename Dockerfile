@@ -715,6 +715,24 @@ RUN mkdir -p /etc/apt/keyrings \
     && rm -rf /var/lib/apt/lists/*
 
 # -----------------------------------------------------------------------------
+# PowerShell PSReadLine history directory
+# Pre-creates the PSReadLine history directory so the first `pwsh` launch never
+# mkdirs it at runtime. Root cause (Issue #18): /home/vscode is mode 750 owned
+# vscode:vscode and .local does not exist at build time, so PSReadLine must
+# create the entire ~/.local/share/powershell/PSReadLine chain on first launch.
+# Runtime failure mode: a root-owned .local appearing after the build
+# (devcontainer host integration) makes the default history path unwritable —
+# "Access to the path '/home/vscode/.local/share' is denied". Ownership, not
+# just existence, is the point, so an in-RUN assertion fails the build if the
+# directory is not owned by vscode.
+# The residual case (root-owned .local appearing post-build) is covered by the
+# script-level history fallback baked in the next block (Issue #18).
+# -----------------------------------------------------------------------------
+RUN mkdir -p /home/vscode/.local/share/powershell/PSReadLine \
+    && chown -R vscode:vscode /home/vscode/.local \
+    && [ "$(stat -c '%U' /home/vscode/.local/share/powershell/PSReadLine)" = "vscode" ]
+
+# -----------------------------------------------------------------------------
 # Final ownership and user setup
 # The base image creates a non-root 'vscode' user. We ensure the pipx bin
 # directory (set to /usr/local/bin) and completion files are accessible.
