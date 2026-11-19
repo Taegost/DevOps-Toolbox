@@ -733,6 +733,22 @@ RUN mkdir -p /home/vscode/.local/share/powershell/PSReadLine \
     && [ "$(stat -c '%U' /home/vscode/.local/share/powershell/PSReadLine)" = "vscode" ]
 
 # -----------------------------------------------------------------------------
+# PowerShell git prompt script (Issue #18)
+# First-party, dependency-free prompt function: `PS <path>` with a blue path,
+# bold-red (branch) on a branch, (short-SHA) on detached HEAD, nothing outside
+# a work tree. Baked to a stable system path and NOT put on PATH — consumers
+# dot-source it from $PROFILE via postCreateCommand (see README), it is never
+# executed. Also carries the silent PSReadLine history fallback for the
+# residual root-owned-.local case left open by the block above. chmod keeps
+# the file world-readable regardless of build-context file modes; the grep
+# asserts the baked file is the prompt script, not an empty/failed COPY.
+# -----------------------------------------------------------------------------
+COPY dependencies/ps_git_prompt.ps1 /usr/local/share/powershell/
+RUN chmod 0644 /usr/local/share/powershell/ps_git_prompt.ps1 \
+    && test -r /usr/local/share/powershell/ps_git_prompt.ps1 \
+    && grep -q '^function prompt' /usr/local/share/powershell/ps_git_prompt.ps1
+
+# -----------------------------------------------------------------------------
 # Final ownership and user setup
 # The base image creates a non-root 'vscode' user. We ensure the pipx bin
 # directory (set to /usr/local/bin) and completion files are accessible.
