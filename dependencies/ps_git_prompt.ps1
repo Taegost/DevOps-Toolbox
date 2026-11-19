@@ -43,7 +43,17 @@ function prompt {
 # default path unwritable -> redirect to $HOME/.ps_readline_history.txt.
 # Anything that throws inside either branch is swallowed below - nothing
 # reaches the console.
-if (Get-Module -Name PSReadLine) {
+# NOTE: $PROFILE runs BEFORE the console host imports PSReadLine, so a bare
+# Get-Module check here sees nothing in interactive sessions and the guard
+# would silently never run. Force-import in interactive ConsoleHost sessions
+# (idempotent - the host reuses the loaded module); non-interactive sessions
+# stay untouched.
+$psGitPromptReadLine = Get-Module -Name PSReadLine
+if (-not $psGitPromptReadLine -and [Environment]::UserInteractive -and $Host.Name -eq 'ConsoleHost') {
+    Import-Module PSReadLine -ErrorAction SilentlyContinue
+    $psGitPromptReadLine = Get-Module -Name PSReadLine
+}
+if ($psGitPromptReadLine) {
     $psGitPromptPreviousEap = $ErrorActionPreference
     try {
         $ErrorActionPreference = 'Stop'
