@@ -25,28 +25,43 @@
 #   from your environment), then re-dot-source this script to unlock.
 # =============================================================================
 
-$bwStatus = (bw status | ConvertFrom-Json).status
-switch ($bwStatus) {
-    'unlocked' {
-        Write-Host 'bw: vault already unlocked in this shell (BW_SESSION set) - nothing to do'
-        return
+# Pin plain output for machine-consumed calls: a caller's BW_RESPONSE=true
+# would wrap every bw call in a JSON envelope (upstream base-program.ts
+# checks it against the string "true", and the envelope wins even over
+# --raw), corrupting both the status parse and the session key. The
+# caller's value — including unset — is restored in finally.
+$prevResponse = $env:BW_RESPONSE
+$env:BW_RESPONSE = 'false'
+try {
+    $bwStatus = (bw status | ConvertFrom-Json).status
+    switch ($bwStatus) {
+        'unlocked' {
+            Write-Host 'bw: vault already unlocked in this shell (BW_SESSION set) - nothing to do'
+            return
+        }
+        'unauthenticated' {
+            Write-Host 'bw: not logged in - starting interactive login'
+            bw login
+            $key = bw unlock --raw
+        }
+        'locked' {
+            Write-Host 'bw: vault locked - unlock to get a session key'
+            $key = bw unlock --raw
+        }
+        default {
+            throw "bw-login: unexpected bw status '$bwStatus' (expected unlocked, unauthenticated or locked)"
+        }
     }
-    'unauthenticated' {
-        Write-Host 'bw: not logged in - starting interactive login'
-        bw login
-        $key = bw unlock --raw
+
+    if (-not $key) {
+        throw 'bw-login: unlock produced no session key'
     }
-    'locked' {
-        Write-Host 'bw: vault locked - unlock to get a session key'
-        $key = bw unlock --raw
-    }
-    default {
-        throw "bw-login: unexpected bw status '$bwStatus' (expected unlocked, unauthenticated or locked)"
+
+    $env:BW_SESSION = $key
+} finally {
+    if ($null -eq $prevResponse) {
+        Remove-Item Env:\BW_RESPONSE -ErrorAction SilentlyContinue
+    } else {
+        $env:BW_RESPONSE = $prevResponse
     }
 }
-
-if (-not $key) {
-    throw 'bw-login: unlock produced no session key'
-}
-
-$env:BW_SESSION = $key

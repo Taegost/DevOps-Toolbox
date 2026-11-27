@@ -25,12 +25,16 @@
 # =============================================================================
 set -euo pipefail
 
-# `bw status` prints a JSON object; grep extracts the status value without a
-# jq dependency. BW_NOINTERACTION=true keeps any prompt from hanging a
-# non-interactive call (upstream compares the flag against the string
-# "true", not "1").
-BW_STATUS_JSON=$(BW_NOINTERACTION=true bw status)
-BW_STATUS=$(grep -o '"status":"[^"]*"' <<< "${BW_STATUS_JSON}" | cut -d'"' -f4 || true)
+# `bw status` prints a JSON object. BW_NOINTERACTION=true keeps any prompt
+# from hanging a non-interactive call, and BW_RESPONSE=false pins plain
+# output — a caller's BW_RESPONSE=true would wrap every bw call in a JSON
+# envelope (upstream base-program.ts checks both against the string "true",
+# and the envelope wins even over --raw). The status field is parsed with
+# python3 so BW_PRETTY=true's spaced JSON ("status": "locked") parses the
+# same as compact. An unparseable body yields an empty status, which the
+# case statement below rejects loudly.
+BW_STATUS_JSON=$(BW_NOINTERACTION=true BW_RESPONSE=false bw status)
+BW_STATUS=$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("status",""))' <<< "${BW_STATUS_JSON}" 2>/dev/null || true)
 
 case "${BW_STATUS}" in
     unlocked)
@@ -40,11 +44,11 @@ case "${BW_STATUS}" in
     unauthenticated)
         echo "bw: not logged in - starting interactive login" >&2
         bw login >&2
-        key=$(bw unlock --raw)
+        key=$(BW_RESPONSE=false bw unlock --raw)
         ;;
     locked)
         echo "bw: vault locked - unlock to get a session key" >&2
-        key=$(bw unlock --raw)
+        key=$(BW_RESPONSE=false bw unlock --raw)
         ;;
     *)
         echo "bw-login: unexpected bw status '${BW_STATUS}' (expected unlocked, unauthenticated or locked)" >&2
