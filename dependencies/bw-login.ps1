@@ -13,6 +13,9 @@
 #   $env:BW_SESSION on exit.
 #     . /usr/local/share/powershell/bw-login.ps1
 #
+# Error paths throw (never exit): exit would terminate the dot-sourcing
+# session, and a failed unlock must not kill the caller's shell.
+#
 # FIDO2-only 2FA:
 #   Password-based `bw login` is blocked for FIDO2-only accounts (the CLI
 #   has no WebAuthn support), and the interactive API-key prompts of
@@ -38,14 +41,12 @@ switch ($bwStatus) {
         $key = bw unlock --raw
     }
     default {
-        Write-Error "bw-login: unexpected bw status '$bwStatus' (expected unlocked, unauthenticated or locked)"
-        exit 1
+        throw "bw-login: unexpected bw status '$bwStatus' (expected unlocked, unauthenticated or locked)"
     }
 }
 
 if (-not $key) {
-    Write-Error 'bw-login: unlock produced no session key'
-    exit 1
+    throw 'bw-login: unlock produced no session key'
 }
 
 $env:BW_SESSION = $key

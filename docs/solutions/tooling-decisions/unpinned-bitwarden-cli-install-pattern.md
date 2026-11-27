@@ -251,7 +251,7 @@ The resolution step selected `cli-v2026.11.1` — resolver logged `BW_RESOLVE_OK
 
 ### Where the knowledge lives in the repo
 
-- `Dockerfile` lines 752-886 — block banner (design, disclosures, triage table) and the install RUN; the first-party `bw-login` helper block (bash + PowerShell) follows immediately after.
+- `Dockerfile` lines 752-887 — block banner (design, disclosures, triage table) and the install RUN; the first-party `bw-login` helper block (bash + PowerShell) follows immediately after.
 - `CLAUDE.md` Key Conventions — the `bw` bullet recording the deviation decision and its accepted costs.
 - `CONCEPTS.md` — the "Unpinned install" entry, which names the concept and contrasts it with the "Major-float pin" (the nearest pinned cousin, which still carries a version-bearing ARG and floats only point releases).
 
