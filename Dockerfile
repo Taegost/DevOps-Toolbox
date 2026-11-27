@@ -750,6 +750,142 @@ RUN chmod 0644 /usr/local/share/powershell/ps_git_prompt.ps1 \
     && grep -q '^function prompt' /usr/local/share/powershell/ps_git_prompt.ps1
 
 # -----------------------------------------------------------------------------
+# Bitwarden CLI (bw)
+# Secrets-management CLI; prerequisite for the future Ansible bitwarden lookup.
+# First fully-unpinned tool in the image — an explicit user decision: no
+# version ARG and no .env.example mirror entry (the Version mirror invariant
+# ties entries to ARGs). Accepted trade-offs: versioned image tags stop being
+# byte-reproducible, and the weekly rebuild adopts whatever upstream
+# published, unreviewed.
+#
+# Resolution (one unauthenticated GitHub API call per platform): GET
+# /repos/bitwarden/clients/releases?per_page=30 is newest-first with calver
+# tags cli-vYYYY.M.P; python3 takes the FIRST ^cli-v entry published at least
+# 24 hours before the build and reads tag, per-arch asset URL and sha256
+# digest from that one response. /releases/latest is NOT usable — the
+# bitwarden/clients monorepo shares one release stream with the desktop and
+# browser clients. The 24h age floor keeps brand-new releases out long enough
+# for community scrutiny (shaped by the April 2026 npm-channel compromise of
+# @bitwarden/cli, live ~90 minutes). The resolver runs under python3 -I:
+# the API payload is untrusted input.
+#
+# Cache semantics: "latest at each cacheless build" — the weekly Monday cron,
+# workflow_dispatch default and --no-cache re-resolve. PR and semver-tag
+# builds read the GHA layer cache and reuse the resolved bw layer, so a
+# versioned tag can ship cache-stale bw — disclosed and user-accepted.
+#
+# Variant: bw-bit-* — the vendor's default distribution build (what
+# bitwarden.com/download serves), including non-OSS features (device
+# approval) that bw-oss-* lacks. Rejected channels: the archived
+# bitwarden/cli repo (frozen 2022), npm (needs Node >= 22, which the image
+# does not ship, and the April 2026 compromised channel), Snap (amd64-only).
+#
+# Integrity disclosure: the sha256 gate uses the per-asset `digest` field of
+# the same API response that names the asset — same-host trust, the same
+# class as the terragrunt/packer SHA256SUMS gates. It catches corruption and
+# drift, not a full-host compromise: integrity, not provenance. A missing or
+# malformed digest fails the build closed.
+#
+# Dual-arch: each platform resolves independently (amd64 -> unsuffixed asset,
+# arm64 -> -arm64 asset). Same release in practice; a release publishing
+# between the two platform resolutions can land different bw versions in one
+# multi-arch manifest (best-effort — minutes-wide window against a roughly
+# monthly cadence).
+#
+# Weekly-red triage (the weekly cron build is cacheless, so upstream drift
+# lands here first; every signature below is identifiable from the log):
+#   - BW_RATE_LIMIT     -> GitHub API non-200 (403 = unauthenticated 60 req/h
+#                         per runner IP exhausted). Retry once; recurring ->
+#                         authenticated CI-side resolution is the documented
+#                         escape hatch.
+#   - BW_ASSET_RENAME   -> asset family renamed upstream (precedent:
+#                         cli-v2026.11.0 renamed bw-linux- -> bw-bit-linux-,
+#                         with an upstream warning that download scripts
+#                         break). Recovery is a one-block regex edit in this
+#                         RUN.
+#   - BW_NO_ARCH_ASSET  -> family present but this arch's asset missing
+#                         (vendor regression; upstream docs still point arm64
+#                         at npm).
+#   - BW_SHA_MISMATCH   -> downloaded bytes fail the API-published digest.
+#   Secondary and also loud: BW_NO_RELEASE (nothing in the newest 30 clears
+#   the 24h floor), BW_DIGEST_ABSENT (digest missing/malformed — fail
+#   closed), BW_VERSION_MISMATCH (upstream print format changed).
+#
+# Tail placement: nothing sits below this block but the final ownership /
+# USER vscode instruction, so a rename-recovery emergency edit invalidates no
+# layer below it. BW_NOINTERACTION=1 prefixes every bw call so a prompt can
+# never hang the build. No shell completion ships (scoped out by decision).
+# -----------------------------------------------------------------------------
+RUN BW_API_JSON=/tmp/bw-releases.json BW_RESOLVER=/tmp/bw-resolve.py BW_ENV=/tmp/bw.env BW_ZIP=/tmp/bw.zip BW_BIN=/tmp/bw.bin \
+    && HTTP_CODE=$(curl -sS \
+        -H "Accept: application/vnd.github+json" \
+        -o "${BW_API_JSON}" \
+        -w '%{http_code}' \
+        "https://api.github.com/repos/bitwarden/clients/releases?per_page=30") \
+    && if [ "${HTTP_CODE}" != "200" ]; then \
+        echo "BW_RATE_LIMIT: GitHub API returned HTTP ${HTTP_CODE} (403 = unauthenticated rate limit: 60 req/h per runner IP; any other code = API or network outage). Retry once; recurring failures -> authenticated CI-side resolution escape hatch"; \
+        exit 1; \
+    fi \
+    && printf '%s\n' \
+        'import json, re, shlex, sys' \
+        'from datetime import datetime, timedelta, timezone' \
+        '' \
+        'json_path, arch, env_path = sys.argv[1], sys.argv[2], sys.argv[3]' \
+        'suffix = "-arm64" if arch == "arm64" else ""' \
+        'asset_re = re.compile(r"^bw-bit-linux" + re.escape(suffix) + r"-\d+\.\d+\.\d+\.zip$")' \
+        'floor = (datetime.now(timezone.utc) - timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%S")' \
+        'with open(json_path) as fh:' \
+        '    releases = json.load(fh)' \
+        'if not isinstance(releases, list):' \
+        '    sys.exit("BW_RESOLVE_BAD_JSON: GitHub API response is not a release list")' \
+        'skipped = []' \
+        'for rel in releases:' \
+        '    tag = rel.get("tag_name", "")' \
+        '    if not re.match(r"^cli-v", tag):' \
+        '        continue' \
+        '    published = str(rel.get("published_at", ""))[:19]' \
+        '    if published > floor:' \
+        '        skipped.append(tag + " (published " + published + "Z)")' \
+        '        continue' \
+        '    assets = [a for a in (rel.get("assets") or []) if asset_re.match(a.get("name", ""))]' \
+        '    if not assets:' \
+        '        family = [a for a in (rel.get("assets") or []) if str(a.get("name", "")).startswith("bw-bit-linux")]' \
+        '        if not family:' \
+        '            sys.exit("BW_ASSET_RENAME: no bw-bit-linux-* asset on " + tag + " - asset family renamed upstream, update the regex in this RUN (precedent: cli-v2026.11.0 renamed bw-linux- to bw-bit-linux-)")' \
+        '        sys.exit("BW_NO_ARCH_ASSET: bw-bit-linux assets exist on " + tag + " but none matches " + asset_re.pattern + " (vendor dropped this arch? upstream docs point arm64 at npm)")' \
+        '    digest = assets[0].get("digest", "")' \
+        '    if not re.match(r"^sha256:[0-9a-f]{64}$", digest):' \
+        '        sys.exit("BW_DIGEST_ABSENT: assets[].digest missing or malformed on " + tag + " - failing closed, nothing installed")' \
+        '    with open(env_path, "w") as fh:' \
+        '        fh.write("export BW_TAG=" + shlex.quote(tag) + "\n")' \
+        '        fh.write("export BW_VERSION=" + shlex.quote(tag[5:]) + "\n")' \
+        '        fh.write("export BW_ASSET_URL=" + shlex.quote(assets[0]["browser_download_url"]) + "\n")' \
+        '        fh.write("export BW_SHA256=" + shlex.quote(digest.split(":", 1)[1]) + "\n")' \
+        '    print("BW_RESOLVE_OK: selected " + tag + " (published " + published + "Z)", file=sys.stderr)' \
+        '    if skipped:' \
+        '        print("BW_SKIPPED_TOO_YOUNG: below the 24h age floor: " + ", ".join(skipped), file=sys.stderr)' \
+        '    sys.exit(0)' \
+        'sys.exit("BW_NO_RELEASE: no cli-v release at least 24h old within the newest 30 (skipped as too young: " + (", ".join(skipped) if skipped else "none seen") + ")")' \
+        > "${BW_RESOLVER}" \
+    && python3 -I "${BW_RESOLVER}" "${BW_API_JSON}" "${TARGETARCH}" "${BW_ENV}" \
+    && . "${BW_ENV}" \
+    && curl -fsSL "${BW_ASSET_URL}" -o "${BW_ZIP}" \
+    && if ! echo "${BW_SHA256}  ${BW_ZIP}" | sha256sum -c; then \
+        echo "BW_SHA_MISMATCH: downloaded bytes fail the API-published sha256 digest for ${BW_TAG} (corruption or upstream drift)"; \
+        exit 1; \
+    fi \
+    && unzip -p "${BW_ZIP}" bw > "${BW_BIN}" \
+    && install -m 755 "${BW_BIN}" /usr/local/bin/bw \
+    && BW_GOT=$(BW_NOINTERACTION=1 bw --version) \
+    && if [ "${BW_GOT}" != "${BW_VERSION}" ]; then \
+        echo "BW_VERSION_MISMATCH: bw --version printed [${BW_GOT}], expected [${BW_VERSION}] (upstream print format changed)"; \
+        exit 1; \
+    fi \
+    && BW_NOINTERACTION=1 bw status > /dev/null \
+    && rm -f "${BW_API_JSON}" "${BW_RESOLVER}" "${BW_ENV}" "${BW_ZIP}" "${BW_BIN}" \
+    && echo "Bitwarden CLI installed: ${BW_TAG} (${BW_VERSION})"
+
+# -----------------------------------------------------------------------------
 # Final ownership and user setup
 # The base image creates a non-root 'vscode' user. We ensure the pipx bin
 # directory (set to /usr/local/bin) and completion files are accessible.
