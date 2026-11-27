@@ -1,0 +1,67 @@
+# =============================================================================
+# bw-login.ps1 - Bitwarden CLI login + unlock helper
+# =============================================================================
+# What it does:
+#   One step: checks `bw status`, runs `bw login` interactively if the CLI is
+#   unauthenticated, unlocks the vault, and sets $env:BW_SESSION in the
+#   calling session. PowerShell twin of dependencies/bw-login.sh.
+#
+# How it is loaded:
+#   NOT auto-loaded and NOT on PATH. Dot-source it - the PowerShell analog of
+#   bash's eval "$(bw-login)": a child process cannot set its parent's
+#   environment, so running the script normally would discard
+#   $env:BW_SESSION on exit.
+#     . /usr/local/share/powershell/bw-login.ps1
+#
+# Error paths throw (never exit): exit would terminate the dot-sourcing
+# session, and a failed unlock must not kill the caller's shell.
+#
+# FIDO2-only 2FA:
+#   Password-based `bw login` is blocked for FIDO2-only accounts (the CLI
+#   has no WebAuthn support), and the interactive API-key prompts of
+#   `bw login --apikey` don't compose inside this generic flow - run
+#   `bw login --apikey` manually first (it prompts for the personal API
+#   key's client_id/client_secret, or reads BW_CLIENTID/BW_CLIENTSECRET
+#   from your environment), then re-dot-source this script to unlock.
+# =============================================================================
+
+# Pin plain output for machine-consumed calls: a caller's BW_RESPONSE=true
+# would wrap every bw call in a JSON envelope (upstream base-program.ts
+# checks it against the string "true", and the envelope wins even over
+# --raw), corrupting both the status parse and the session key. The
+# caller's value — including unset — is restored in finally.
+$prevResponse = $env:BW_RESPONSE
+$env:BW_RESPONSE = 'false'
+try {
+    $bwStatus = (bw status | ConvertFrom-Json).status
+    switch ($bwStatus) {
+        'unlocked' {
+            Write-Host 'bw: vault already unlocked in this shell (BW_SESSION set) - nothing to do'
+            return
+        }
+        'unauthenticated' {
+            Write-Host 'bw: not logged in - starting interactive login'
+            bw login
+            $key = bw unlock --raw
+        }
+        'locked' {
+            Write-Host 'bw: vault locked - unlock to get a session key'
+            $key = bw unlock --raw
+        }
+        default {
+            throw "bw-login: unexpected bw status '$bwStatus' (expected unlocked, unauthenticated or locked)"
+        }
+    }
+
+    if (-not $key) {
+        throw 'bw-login: unlock produced no session key'
+    }
+
+    $env:BW_SESSION = $key
+} finally {
+    if ($null -eq $prevResponse) {
+        Remove-Item Env:\BW_RESPONSE -ErrorAction SilentlyContinue
+    } else {
+        $env:BW_RESPONSE = $prevResponse
+    }
+}

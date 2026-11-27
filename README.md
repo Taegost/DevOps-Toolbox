@@ -33,6 +33,7 @@ with Docker and VS Code — no local setup required.
 | [gcloud CLI](https://cloud.google.com/sdk/gcloud) | See [Dockerfile](./Dockerfile) | Google Cloud resource management |
 | [GitHub CLI](https://cli.github.com) | See [Dockerfile](./Dockerfile) | GitHub workflow management |
 | [AWS CLI](https://aws.amazon.com/cli/) | See [Dockerfile](./Dockerfile) | AWS resource management |
+| [Bitwarden CLI](https://bitwarden.com/help/cli/) | Unpinned — latest at build, see [Dockerfile](./Dockerfile) | Secrets management CLI |
 | [psql](https://www.postgresql.org/docs/current/app-psql.html) | See [Dockerfile](./Dockerfile) | PostgreSQL CLI client |
 | [mariadb / mysql](https://mariadb.org) | See [Dockerfile](./Dockerfile) | MariaDB and MySQL CLI client |
 | [sqlite3](https://sqlite.org) | See [Dockerfile](./Dockerfile) | SQLite CLI client |
@@ -103,6 +104,10 @@ Or use environment variables in `devcontainer.json`:
   "source=${localEnv:HOME}/.config/gh,target=/home/vscode/.config/gh,type=bind,readonly"
 ]
 ```
+
+**Bitwarden CLI** — run `bw login` interactively inside the container after it starts. Unlock the vault with `bw unlock` and export the session key it prints (`export BW_SESSION=...`) into your shell — vault-reading commands require it. `bw status` reports the current authentication state. The image ships a helper that does all three steps in one: bash users run `eval "$(bw-login)"`, PowerShell users dot-source the script with `. /usr/local/share/powershell/bw-login.ps1` — each logs in if needed, unlocks, and sets `BW_SESSION` in the current shell. Accounts using a FIDO2-only second factor cannot use password-based `bw login` (the CLI has no WebAuthn support) — use `bw login --apikey` instead: it prompts for the personal API key's client_id/client_secret, or reads `BW_CLIENTID`/`BW_CLIENTSECRET` from your shell environment at runtime, then `bw unlock` for the session — no 2FA change needed.
+
+**WARNING:** Never place `BW_CLIENTID`, `BW_CLIENTSECRET`, or `BW_PASSWORD` in image `ENV` or in `devcontainer.json` `containerEnv`/`remoteEnv`. Any secret in `devcontainer.json` leaks via the repository itself, and `containerEnv` values also leak via `docker inspect`. Authenticate interactively, or set the session key in your shell at runtime.
 
 ---
 
