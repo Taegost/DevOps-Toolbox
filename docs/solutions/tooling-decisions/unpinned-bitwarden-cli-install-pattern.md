@@ -139,17 +139,17 @@ with open(env_path, "w") as fh:
 
 ### 6. Post-install asserts, still inside the RUN
 
-Two assertions prove the installed binary before the layer is cached. First, `bw --version` must string-equal the resolver's version — this catches an upstream print-format change that would otherwise silently decouple the reported version from the resolved one (`BW_VERSION_MISMATCH`). Second, `BW_NOINTERACTION=1 bw status` must exit 0, proving the binary executes account-free without hanging. `BW_NOINTERACTION=1` prefixes every `bw` call in the block so a prompt can never hang the build.
+Two assertions prove the installed binary before the layer is cached. First, `bw --version` must string-equal the resolver's version — this catches an upstream print-format change that would otherwise silently decouple the reported version from the resolved one (`BW_VERSION_MISMATCH`). Second, `BW_NOINTERACTION=true bw status` must exit 0, proving the binary executes account-free without hanging. `BW_NOINTERACTION=true` prefixes every `bw` call in the block so a prompt can never hang the build.
 
 ```dockerfile
 && unzip -p "${BW_ZIP}" bw > "${BW_BIN}" \
 && install -m 755 "${BW_BIN}" /usr/local/bin/bw \
-&& BW_GOT=$(BW_NOINTERACTION=1 bw --version) \
+&& BW_GOT=$(BW_NOINTERACTION=true bw --version) \
 && if [ "${BW_GOT}" != "${BW_VERSION}" ]; then \
     echo "BW_VERSION_MISMATCH: bw --version printed [${BW_GOT}], expected [${BW_VERSION}] (upstream print format changed)"; \
     exit 1; \
 fi \
-&& BW_NOINTERACTION=1 bw status > /dev/null \
+&& BW_NOINTERACTION=true bw status > /dev/null \
 && rm -f "${BW_API_JSON}" "${BW_RESOLVER}" "${BW_ENV}" "${BW_ZIP}" "${BW_BIN}" \
 && echo "Bitwarden CLI installed: ${BW_TAG} (${BW_VERSION})"
 ```
@@ -159,7 +159,7 @@ fi \
 Going unpinned touches four other repo conventions; handle each deliberately:
 
 - **Version mirror invariant.** No version ARG means no `.env.example` entry — the mirror ties entries to ARGs, and a mirror entry without an ARG would itself be drift. The absence is documented in the block banner and in the `CLAUDE.md` Key Conventions bullet. A future automated mirror check (issue #14) must treat ARG-less tools as in-scope-for-nothing, not as drift.
-- **Tail placement.** The block sits at the Dockerfile tail, directly before the final `USER vscode`. Nothing lives below it, so a rename-recovery emergency edit invalidates no layer beneath — the cheapest possible recovery path for the most likely upstream break.
+- **Near-tail placement.** The block sits directly before the first-party `bw-login` helper block and the final `USER vscode`. Only that thin helper COPY+RUN sits beneath, so a rename-recovery emergency edit invalidates at most two cheap layers — still the cheapest practical recovery path for the most likely upstream break.
 - **Temp artifact hygiene.** The API JSON, resolver script, env file, zip, and extracted binary are all `/tmp` paths and all removed inside the same RUN — the layer ships only `/usr/local/bin/bw`.
 - **No shell completion.** Scoped out by decision; nothing ships for any shell.
 
@@ -172,7 +172,7 @@ Those signatures make weekly-red diagnosis mechanical. The block banner document
 | Signature | Meaning | Recovery |
 |---|---|---|
 | `BW_RATE_LIMIT` | GitHub API non-200 (403 = unauthenticated 60 req/h per runner IP) | Retry once; recurring — authenticated CI-side resolution is the documented escape hatch |
-| `BW_ASSET_RENAME` | Asset family renamed upstream | One-block regex edit in this RUN (tail placement keeps the blast radius at one layer) |
+| `BW_ASSET_RENAME` | Asset family renamed upstream | One-block regex edit in this RUN (near-tail placement keeps the blast radius at the bw block plus the thin helper layers) |
 | `BW_NO_ARCH_ASSET` | Family present, this arch's asset missing | Vendor regression; npm is the documented but rejected fallback |
 | `BW_SHA_MISMATCH` | Downloaded bytes fail the API digest | Investigate before retrying — corruption or upstream drift |
 | `BW_NO_RELEASE` | Nothing in the newest 30 clears the 24h floor | Secondary; usually means upstream paused CLI releases |
@@ -247,11 +247,11 @@ Execution and the rest of the shell chain, verbatim from the same RUN:
 
 ### Smoke evidence from the implementing build
 
-The resolution step selected `cli-v2026.11.1` — resolver logged `BW_RESOLVE_OK: selected cli-v2026.11.1`; the downloaded zip passed `sha256sum -c` against the API-published digest; `bw --version` matched the resolved version and `BW_NOINTERACTION=1 bw status` exited 0; the dev container's acceptance checks ran green as the `vscode` user.
+The resolution step selected `cli-v2026.11.1` — resolver logged `BW_RESOLVE_OK: selected cli-v2026.11.1`; the downloaded zip passed `sha256sum -c` against the API-published digest; `bw --version` matched the resolved version and `BW_NOINTERACTION=true bw status` exited 0; the dev container's acceptance checks ran green as the `vscode` user.
 
 ### Where the knowledge lives in the repo
 
-- `Dockerfile` lines 752-886 — block banner (design, disclosures, triage table) and the install RUN.
+- `Dockerfile` lines 752-886 — block banner (design, disclosures, triage table) and the install RUN; the first-party `bw-login` helper block (bash + PowerShell) follows immediately after.
 - `CLAUDE.md` Key Conventions — the `bw` bullet recording the deviation decision and its accepted costs.
 - `CONCEPTS.md` — the "Unpinned install" entry, which names the concept and contrasts it with the "Major-float pin" (the nearest pinned cousin, which still carries a version-bearing ARG and floats only point releases).
 

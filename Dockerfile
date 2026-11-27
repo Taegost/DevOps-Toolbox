@@ -811,9 +811,10 @@ RUN chmod 0644 /usr/local/share/powershell/ps_git_prompt.ps1 \
 #   the 24h floor), BW_DIGEST_ABSENT (digest missing/malformed — fail
 #   closed), BW_VERSION_MISMATCH (upstream print format changed).
 #
-# Tail placement: nothing sits below this block but the final ownership /
-# USER vscode instruction, so a rename-recovery emergency edit invalidates no
-# layer below it. BW_NOINTERACTION=1 prefixes every bw call so a prompt can
+# Near-tail placement: only the first-party bw-login helper block and the
+# final ownership / USER vscode instruction sit below, so a rename-recovery
+# emergency edit invalidates at most the thin helper COPY+RUN layers beneath
+# it. BW_NOINTERACTION=true prefixes every bw call so a prompt can
 # never hang the build. No shell completion ships (scoped out by decision).
 # -----------------------------------------------------------------------------
 RUN BW_API_JSON=/tmp/bw-releases.json BW_RESOLVER=/tmp/bw-resolve.py BW_ENV=/tmp/bw.env BW_ZIP=/tmp/bw.zip BW_BIN=/tmp/bw.bin \
@@ -876,14 +877,48 @@ RUN BW_API_JSON=/tmp/bw-releases.json BW_RESOLVER=/tmp/bw-resolve.py BW_ENV=/tmp
     fi \
     && unzip -p "${BW_ZIP}" bw > "${BW_BIN}" \
     && install -m 755 "${BW_BIN}" /usr/local/bin/bw \
-    && BW_GOT=$(BW_NOINTERACTION=1 bw --version) \
+    && BW_GOT=$(BW_NOINTERACTION=true bw --version) \
     && if [ "${BW_GOT}" != "${BW_VERSION}" ]; then \
         echo "BW_VERSION_MISMATCH: bw --version printed [${BW_GOT}], expected [${BW_VERSION}] (upstream print format changed)"; \
         exit 1; \
     fi \
-    && BW_NOINTERACTION=1 bw status > /dev/null \
+    && BW_NOINTERACTION=true bw status > /dev/null \
     && rm -f "${BW_API_JSON}" "${BW_RESOLVER}" "${BW_ENV}" "${BW_ZIP}" "${BW_BIN}" \
     && echo "Bitwarden CLI installed: ${BW_TAG} (${BW_VERSION})"
+
+# -----------------------------------------------------------------------------
+# Bitwarden login helpers (bw-login)
+# First-party convenience wrappers for the login + unlock + session dance the
+# README documents for `bw`: check `bw status`, run `bw login` interactively
+# if unauthenticated, unlock, and hand the session key to the calling shell.
+#   - dependencies/bw-login.sh -> /usr/local/bin/bw-login (mode 0755).
+#     Invoked as `eval "$(bw-login)"`: a child process cannot export into
+#     its parent shell, so stdout carries only `export BW_SESSION='<key>'`
+#     (single-quoted; the session key is base64, no quote characters) and
+#     every human-facing note goes to stderr.
+#   - dependencies/bw-login.ps1 -> /usr/local/share/powershell/bw-login.ps1
+#     (mode 0644, the ps_git_prompt.ps1 location), dot-sourced as
+#     `. /usr/local/share/powershell/bw-login.ps1` so $env:BW_SESSION is set
+#     in the calling session.
+# No version ARG and no .env.example mirror entry: first-party script class,
+# same as ps_git_prompt.ps1. FIDO2-only 2FA users keep the manual
+# `bw login --apikey` path (see README) — the interactive API-key prompts
+# don't compose inside a generic login flow. Validation fails the build
+# closed: `bash -n` syntax check and shebang grep on the bash script, a
+# PowerShell parse check (scriptblock creation — parses without executing)
+# on the ps1; pwsh is installed earlier in this file. Scripts stage under
+# /tmp and are removed in the same RUN, matching the bw block's temp
+# artifact hygiene so the layer ships only the two installed files.
+# -----------------------------------------------------------------------------
+COPY dependencies/bw-login.sh dependencies/bw-login.ps1 /tmp/bw-login/
+RUN install -m 755 /tmp/bw-login/bw-login.sh /usr/local/bin/bw-login \
+    && install -m 0644 /tmp/bw-login/bw-login.ps1 /usr/local/share/powershell/bw-login.ps1 \
+    && rm -rf /tmp/bw-login \
+    && [ "$(stat -c '%a' /usr/local/bin/bw-login)" = "755" ] \
+    && [ "$(stat -c '%a' /usr/local/share/powershell/bw-login.ps1)" = "644" ] \
+    && bash -n /usr/local/bin/bw-login \
+    && grep -q '^#!/usr/bin/env bash' /usr/local/bin/bw-login \
+    && pwsh -NoProfile -Command "[scriptblock]::Create((Get-Content -Raw '/usr/local/share/powershell/bw-login.ps1')) > \$null"
 
 # -----------------------------------------------------------------------------
 # Final ownership and user setup

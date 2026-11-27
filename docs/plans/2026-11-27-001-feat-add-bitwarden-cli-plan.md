@@ -136,7 +136,7 @@ Non-goals for this plan:
 - **Image size.** The unpacked native binary is ~150 MB — the largest single tool in the image by a wide margin. Accepted; disclose in the PR body.
 - **Lost guarantees, accepted at synthesis.** Versioned image tags (1.2.3, 1.2) are no longer byte-reproducible, and the weekly build's Drift tripwire role inverts into the delivery mechanism. Versioned tags also carry cache-stale `bw`: PR and tag builds read the GHA layer cache, so a tag build ships whatever the last cacheless build resolved, not the newest release. User-accepted (KTD1.D1); disclosed per the az-ssh convention rather than assumed away.
 - **calver, not semver.** Releases are `YYYY.M.PATCH`; the resolver takes API list order (newest-first) and never sorts — semver assumptions would misorder across years.
-- **FIDO2-only 2FA accounts cannot authenticate to the CLI** (no WebAuthn support; authenticator-app/email methods work). A README note ships with U3 so users discover this before it bites.
+- **FIDO2-only 2FA accounts cannot use password-based CLI login** (no WebAuthn support); `bw login --apikey` works — it prompts for the personal API key client_id/client_secret, or reads `BW_CLIENTID`/`BW_CLIENTSECRET` from runtime shell env — then `bw unlock` for the session; no 2FA change needed. A README note ships with U3 so users discover this before it bites.
 
 ---
 
