@@ -20,7 +20,11 @@ An install with no version-bearing identifier at all — no `ARG`, no Version mi
 *Avoid:* "auto-update", "rolling version"
 
 ### Drift tripwire
-The scheduled cacheless build whose forced layer rebuild re-executes pinned-download checksum gates — the only build on the schedule that re-downloads vendor artifacts, so the sole detector of vendor-side byte drift that warm-cache builds silently skip. A red tripwire at the checksum step means the vendor's bytes changed; at the download step, a moved URL.
+The scheduled cacheless build whose forced layer rebuild re-executes pinned-download checksum gates — the only build on the schedule that re-downloads vendor artifacts, so the sole detector of vendor-side byte drift that warm-cache builds silently skip. A red tripwire at the checksum step means the vendor's bytes changed; at the download step, a moved URL. Exception: for an Unpinned install the same build is the delivery mechanism, not a detector — upstream drift is adopted, not flagged.
+
+### Triage signature
+A distinct, log-greppable failure name baked into an install block (`BW_SHA_MISMATCH`, `BW_ASSET_RENAME`) so a red weekly build identifies the failing stage and its recovery from the log alone, without re-deriving the failure mode. Pairs with the Drift tripwire: the tripwire detects, the signatures triage.
+*Avoid:* "error code", "failure tag"
 
 ### Smoke test
 The full local Docker build of the image, run before any Dockerfile change may be opened as a PR. It is the repo's only build validation step, so an in-build assertion failing is the same as a test failing. PRs are additionally gated on explicit maintainer approval after the smoke test passes — the build alone never authorizes opening a PR.

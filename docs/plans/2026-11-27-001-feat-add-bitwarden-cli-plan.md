@@ -2,6 +2,7 @@
 title: "feat: Add Bitwarden CLI (bw)"
 type: feat
 date: 2026-11-27
+status: completed
 ---
 
 ## Summary
