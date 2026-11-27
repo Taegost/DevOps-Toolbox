@@ -15,6 +15,10 @@ The committed env-file template that mirrors every Dockerfile `ARG`'s default va
 A pin style where the version `ARG` carries only the major version and feeds the package name (`postgresql-client-18`), not a package-version constraint. Point releases resolve fresh from the vendor repo on each cacheless build, so the weekly rebuild delivers patch-level updates without an operator edit. Used when the vendor repo prunes old point releases from its index, making exact pins unsustainable. Contrast with the exact pins used for vendor-hosted binaries and single-version repos.
 *Avoid:* "loose pin", "floating version"
 
+### Unpinned install
+An install with no version-bearing identifier at all — no `ARG`, no Version mirror entry — where resolution happens inside the install `RUN` on each cacheless build by querying an external API (Bitwarden CLI: the GitHub releases API, newest eligible release with a 24-hour age floor). Differs from the Major-float pin, which still carries a version-bearing `ARG` and floats only the point release. The scheduled cacheless build's Drift tripwire role inverts into the delivery mechanism: upstream drift is adopted, not detected. Cacheless builds re-resolve; warm-cache builds (PR, semver-tag) reuse the resolved layer.
+*Avoid:* "auto-update", "rolling version"
+
 ### Drift tripwire
 The scheduled cacheless build whose forced layer rebuild re-executes pinned-download checksum gates — the only build on the schedule that re-downloads vendor artifacts, so the sole detector of vendor-side byte drift that warm-cache builds silently skip. A red tripwire at the checksum step means the vendor's bytes changed; at the download step, a moved URL.
 

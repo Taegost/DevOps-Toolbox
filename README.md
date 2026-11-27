@@ -33,6 +33,7 @@ with Docker and VS Code — no local setup required.
 | [gcloud CLI](https://cloud.google.com/sdk/gcloud) | See [Dockerfile](./Dockerfile) | Google Cloud resource management |
 | [GitHub CLI](https://cli.github.com) | See [Dockerfile](./Dockerfile) | GitHub workflow management |
 | [AWS CLI](https://aws.amazon.com/cli/) | See [Dockerfile](./Dockerfile) | AWS resource management |
+| [Bitwarden CLI](https://bitwarden.com/help/cli/) | Unpinned — latest at build, see [Dockerfile](./Dockerfile) | Secrets management CLI |
 | [psql](https://www.postgresql.org/docs/current/app-psql.html) | See [Dockerfile](./Dockerfile) | PostgreSQL CLI client |
 | [mariadb / mysql](https://mariadb.org) | See [Dockerfile](./Dockerfile) | MariaDB and MySQL CLI client |
 | [sqlite3](https://sqlite.org) | See [Dockerfile](./Dockerfile) | SQLite CLI client |
@@ -103,6 +104,10 @@ Or use environment variables in `devcontainer.json`:
   "source=${localEnv:HOME}/.config/gh,target=/home/vscode/.config/gh,type=bind,readonly"
 ]
 ```
+
+**Bitwarden CLI** — run `bw login` interactively inside the container after it starts. Unlock the vault with `bw unlock` and export the session key it prints (`export BW_SESSION=...`) into your shell — vault-reading commands require it. `bw status` reports the current authentication state. Accounts using a FIDO2-only second factor cannot authenticate to the CLI (it has no WebAuthn support) — authenticator-app or email 2FA methods work.
+
+**WARNING:** Never place `BW_CLIENTID`, `BW_CLIENTSECRET`, or `BW_PASSWORD` in image `ENV` or in `devcontainer.json` `containerEnv`/`remoteEnv`. Any secret in `devcontainer.json` leaks via the repository itself, and `containerEnv` values also leak via `docker inspect`. Authenticate interactively, or set the session key in your shell at runtime.
 
 ---
 
